@@ -7,14 +7,17 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "pnpm --filter @ibp/webview build && pnpm --filter ibp build",
-    "typecheck": "tsc -p packages/shared && tsc -p apps/extension && tsc -p apps/extension/test && tsc -p apps/webview",
+    "build": "pnpm --filter @ibp/webview build && pnpm --filter ibp build && pnpm --filter ibp-desktop build",
+    "typecheck": "tsc -p packages/shared && tsc -p packages/core && tsc -p apps/extension && tsc -p apps/extension/test && tsc -p apps/webview && tsc -p apps/desktop",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:ext": "pnpm build && pnpm --filter ibp test:ext",
-    "package": "pnpm build && pnpm --filter ibp package"
+    "test:desktop": "pnpm build && pnpm --filter ibp-desktop test",
+    "dev:desktop": "pnpm build && pnpm --filter ibp-desktop start",
+    "package": "pnpm build && pnpm --filter ibp package",
+    "package:desktop": "pnpm build && pnpm --filter ibp-desktop package"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

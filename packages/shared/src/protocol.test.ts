@@ -9,7 +9,7 @@ describe("webviewMessageSchema", () => {
     const valid = [
       { type: "ready" },
       { type: "projects/list", requestId: "1" },
-      { type: "projects/create", requestId: "2", details },
+      { type: "projects/create", requestId: "2", details, template: "base-next" },
       { type: "projects/import", requestId: "3" },
       { type: "projects/open", requestId: "4", id },
       { type: "projects/update", requestId: "5", id, details },
@@ -18,6 +18,10 @@ describe("webviewMessageSchema", () => {
       { type: "projects/openCode", requestId: "8", id },
       { type: "projects/openTerminal", requestId: "9", id },
       { type: "settings/update", requestId: "10", update: { key: "language", value: "en" } },
+      { type: "preview/start", requestId: "11", id },
+      { type: "preview/stop", requestId: "12" },
+      { type: "preview/restart", requestId: "13" },
+      { type: "preview/openExternal", requestId: "14" },
     ];
     for (const message of valid) expect(webviewMessageSchema.safeParse(message).success).toBe(true);
   });
@@ -38,6 +42,14 @@ describe("webviewMessageSchema", () => {
     expect(webviewMessageSchema.safeParse(message).success).toBe(false);
   });
 
+  it("rejects unknown templates and URLs smuggled into preview requests", () => {
+    const create = { type: "projects/create", requestId: "1", details, template: "wordpress" };
+    const open = { type: "preview/openExternal", requestId: "1", url: "https://evil.example" };
+    for (const message of [create, open]) {
+      expect(webviewMessageSchema.safeParse(message).success).toBe(false);
+    }
+  });
+
   it("rejects settings outside the allowlist", () => {
     const pathSetting = { key: "projectsRoot", value: "/tmp" };
     const badValue = { key: "language", value: "fr" };
@@ -49,7 +61,12 @@ describe("webviewMessageSchema", () => {
 
   it("rejects blank or oversized project names", () => {
     for (const name of ["   ", "x".repeat(81)]) {
-      const message = { type: "projects/create", requestId: "1", details: { ...details, name } };
+      const message = {
+        type: "projects/create",
+        requestId: "1",
+        details: { ...details, name },
+        template: "base-vite-react",
+      };
       expect(webviewMessageSchema.safeParse(message).success).toBe(false);
     }
   });
@@ -59,6 +76,7 @@ describe("webviewMessageSchema", () => {
       type: "projects/create",
       requestId: "1",
       details: { ...details, name: "  Café Central  " },
+      template: "base-vite-react",
     };
     const parsed = webviewMessageSchema.parse(message);
     expect(parsed.type === "projects/create" && parsed.details.name).toBe("Café Central");
@@ -72,6 +90,21 @@ describe("hostMessageSchema", () => {
     ).toBe(true);
     const failure = { type: "response", requestId: "1", ok: false, error: { code: "io_error" } };
     expect(hostMessageSchema.safeParse(failure).success).toBe(true);
+  });
+
+  it("only accepts loopback preview URLs in state", () => {
+    const state = (url: string | null) => ({
+      type: "state",
+      settings: { language: "en", mode: "beginner", theme: "dark" },
+      projects: [],
+      currentProjectId: null,
+      host: "desktop",
+      capabilities: { terminal: false },
+      preview: { projectId: null, status: "running", url, log: [] },
+    });
+    expect(hostMessageSchema.safeParse(state("http://127.0.0.1:5173/")).success).toBe(true);
+    expect(hostMessageSchema.safeParse(state("http://evil.example:5173/")).success).toBe(false);
+    expect(hostMessageSchema.safeParse(state("javascript:alert(1)")).success).toBe(false);
   });
 
   it("rejects failures with unknown error codes", () => {

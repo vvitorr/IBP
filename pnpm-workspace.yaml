@@ -3,7 +3,9 @@ packages:
   - packages/*
 # templates/* are copied into user projects and installed there with npm; they are not workspace packages.
 
-# esbuild's postinstall only verifies its platform binary. vsce-sign is not needed to package.
+# esbuild's postinstall only verifies its platform binary; electron's downloads the official
+# Electron runtime for this platform. vsce-sign is not needed to package.
 allowBuilds:
+  electron: true
   esbuild: true
   "@vscode/vsce-sign": false

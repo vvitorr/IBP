@@ -3,13 +3,13 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-// Builds straight into the extension's dist/webview with fixed file names, so the extension
-// host can reference them from its own HTML (which carries the CSP nonce).
+// Fixed file names, so each host (VS Code extension, desktop app) can reference them from its
+// own HTML page, which carries that host's CSP.
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   base: "./",
   build: {
-    outDir: fileURLToPath(new URL("../extension/dist/webview", import.meta.url)),
+    outDir: fileURLToPath(new URL("dist", import.meta.url)),
     emptyOutDir: true,
     modulePreload: false,
     cssCodeSplit: false,

@@ -2,11 +2,7 @@ import { join } from "node:path";
 import * as vscode from "vscode";
 import { translate } from "@ibp/shared";
 import { readSettings } from "./config";
-import { exists } from "./fsutil";
-import { JsonProjectStore } from "./projects/JsonProjectStore";
-import { metadataPath } from "./projects/metadata";
-import { ProjectService, TEMPLATE_ID } from "./projects/ProjectService";
-import { runGit } from "./projects/git";
+import { exists, JsonProjectStore, metadataPath, ProjectService, runGit } from "@ibp/core";
 import { StudioPanel, type StudioDeps } from "./studio/StudioPanel";
 
 /** Exported for integration tests only. */
@@ -21,7 +17,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<IbpApi
   );
   const service = new ProjectService({
     store,
-    templateDir: join(context.extensionPath, "dist", "templates", TEMPLATE_ID),
+    templatesRoot: join(context.extensionPath, "dist", "templates"),
     git: runGit,
   });
   const deps: StudioDeps = {

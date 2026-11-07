@@ -1,17 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { cp, mkdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, join, relative, sep } from "node:path";
-import type { ProjectDetails, ProjectSummary } from "@ibp/shared";
+import type { ProjectDetails, ProjectSummary, TemplateId } from "@ibp/shared";
 import { hasErrorCode, IbpError } from "../errors";
 import { exists } from "../fsutil";
+import { SHARED_TEMPLATE_DIR, TEMPLATES } from "../templates";
 import { toFolderName } from "./folderName";
 import type { GitRunner } from "./git";
 import { readMetadata, writeMetadata } from "./metadata";
 import type { ProjectStore } from "./ProjectStore";
 import type { ProjectMetadata, ProjectRecord } from "./types";
-
-export const TEMPLATE_ID = "base-vite-react";
-export const TEMPLATE_STACK = "vite-react-ts-tailwind";
 
 export type GitOutcome =
   { status: "committed" } | { status: "no_identity" } | { status: "failed"; detail: string };
@@ -23,8 +21,8 @@ export interface CreateResult {
 
 export interface ProjectServiceOptions {
   store: ProjectStore;
-  /** Folder holding the starter site that is copied for new projects. */
-  templateDir: string;
+  /** Folder holding `shared/` and one folder per template id. */
+  templatesRoot: string;
   git: GitRunner;
   now?: () => Date;
   newId?: () => string;
@@ -45,14 +43,14 @@ async function replaceInFile(file: string, replacements: Record<string, string>)
 
 export class ProjectService {
   private readonly store: ProjectStore;
-  private readonly templateDir: string;
+  private readonly templatesRoot: string;
   private readonly git: GitRunner;
   private readonly now: () => Date;
   private readonly newId: () => string;
 
   constructor(options: ProjectServiceOptions) {
     this.store = options.store;
-    this.templateDir = options.templateDir;
+    this.templatesRoot = options.templatesRoot;
     this.git = options.git;
     this.now = options.now ?? (() => new Date());
     this.newId = options.newId ?? randomUUID;
@@ -72,8 +70,13 @@ export class ProjectService {
     return (await this.store.list()).find((r) => r.path === resolved);
   }
 
-  /** Creates `<parentDir>/<slug of name>` from the template. Never touches an existing folder. */
-  async create(parentDir: string, details: ProjectDetails): Promise<CreateResult> {
+  /** Creates `<parentDir>/<slug of name>` from a template. Never touches an existing folder. */
+  async create(
+    parentDir: string,
+    details: ProjectDetails,
+    templateId: TemplateId,
+  ): Promise<CreateResult> {
+    const template = TEMPLATES[templateId];
     const folderName = toFolderName(details.name);
     const parent = await realpath(parentDir);
     if (!(await stat(parent)).isDirectory())
@@ -88,13 +91,13 @@ export class ProjectService {
     }
 
     try {
-      await this.copyTemplate(target, folderName, details);
+      await this.copyTemplate(target, templateId, folderName, details);
       const metadata: ProjectMetadata = {
         schemaVersion: 1,
         id: this.newId(),
         ...details,
-        stack: TEMPLATE_STACK,
-        template: TEMPLATE_ID,
+        stack: template.stack,
+        template: template.id,
         createdAt: this.now().toISOString(),
       };
       await writeMetadata(target, metadata);
@@ -140,7 +143,11 @@ export class ProjectService {
         client: "",
         industry: "other",
         description: "",
-        stack: hasDependency(pkg, "vite") ? "vite-react" : "react",
+        stack: hasDependency(pkg, "next")
+          ? "next"
+          : hasDependency(pkg, "vite")
+            ? "vite-react"
+            : "react",
         template: null,
         createdAt: this.now().toISOString(),
       };
@@ -188,25 +195,36 @@ export class ProjectService {
     };
   }
 
-  private async copyTemplate(target: string, folderName: string, details: ProjectDetails) {
-    // `target` was just created empty by this call; force:false still never overwrites a file.
-    await cp(this.templateDir, target, {
-      recursive: true,
-      force: false,
-      filter: (source) => {
-        const parts = relative(this.templateDir, source).split(sep);
-        return !parts.some((part) => SKIPPED_TEMPLATE_DIRS.has(part));
-      },
-    });
+  private async copyTemplate(
+    target: string,
+    templateId: TemplateId,
+    folderName: string,
+    details: ProjectDetails,
+  ) {
+    // Shared sections first, then the stack-specific files. `target` was just created empty by
+    // this call, and force:false never overwrites a file (the two trees must not overlap).
+    for (const dir of [SHARED_TEMPLATE_DIR, templateId]) {
+      const source = join(this.templatesRoot, dir);
+      await cp(source, target, {
+        recursive: true,
+        force: false,
+        filter: (path) =>
+          !relative(source, path)
+            .split(sep)
+            .some((p) => SKIPPED_TEMPLATE_DIRS.has(p)),
+      });
+    }
     // Stored without the dot so packaging tools never treat it as an ignore file of their own.
     await rename(join(target, "_gitignore"), join(target, ".gitignore"));
     // Values are JSON-encoded (valid TS/JSON string literals) or HTML-escaped, never pasted raw.
     await replaceInFile(join(target, "package.json"), {
       '"__IBP_PACKAGE_NAME__"': JSON.stringify(folderName),
     });
-    await replaceInFile(join(target, "index.html"), {
-      __IBP_SITE_TITLE__: escapeHtml(details.name),
-    });
+    if (await exists(join(target, "index.html"))) {
+      await replaceInFile(join(target, "index.html"), {
+        __IBP_SITE_TITLE__: escapeHtml(details.name),
+      });
+    }
     await replaceInFile(join(target, "src", "content", "site.ts"), {
       '"__IBP_SITE_NAME__"': JSON.stringify(details.name),
       '"__IBP_CLIENT__"': JSON.stringify(details.client),

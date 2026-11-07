@@ -1,6 +1,6 @@
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ProjectDetails } from "@ibp/shared";
 import { IbpError } from "../errors";
@@ -11,7 +11,7 @@ import { JsonProjectStore } from "./JsonProjectStore";
 import { metadataPath, readMetadata } from "./metadata";
 import { ProjectService } from "./ProjectService";
 
-const templateDir = join(__dirname, "..", "..", "..", "..", "templates", "base-vite-react");
+const templatesRoot = join(__dirname, "..", "..", "..", "..", "templates");
 const details: ProjectDetails = {
   name: 'Tasca "Zé" <Porto>',
   client: "José Silva",
@@ -55,7 +55,7 @@ afterEach(async () => {
 });
 
 function service(git = fakeGit().runner) {
-  return new ProjectService({ store, templateDir, git });
+  return new ProjectService({ store, templatesRoot, git });
 }
 
 describe("toFolderName", () => {
@@ -75,7 +75,11 @@ describe("toFolderName", () => {
 describe("ProjectService.create", () => {
   it("copies the template, fills placeholders safely and registers the project", async () => {
     const git = fakeGit();
-    const { project, git: outcome } = await service(git.runner).create(parent, details);
+    const { project, git: outcome } = await service(git.runner).create(
+      parent,
+      details,
+      "base-vite-react",
+    );
 
     expect(project.path).toBe(join(await realParent(), "tasca-ze-porto"));
     expect(outcome).toEqual({ status: "committed" });
@@ -102,38 +106,75 @@ describe("ProjectService.create", () => {
     expect((await store.list()).map((r) => r.id)).toEqual([project.id]);
   });
 
+  it("creates a Next.js project from the shared sections plus the Next files", async () => {
+    const { project } = await service().create(parent, details, "base-next");
+    expect(project.stack).toBe("next-app-ts-tailwind");
+    for (const file of [
+      "src/app/layout.tsx",
+      "src/app/page.tsx",
+      "src/components/Hero.tsx",
+      "next.config.ts",
+    ]) {
+      expect(await exists(join(project.path, file))).toBe(true);
+    }
+    expect(await exists(join(project.path, "index.html"))).toBe(false);
+    const pkg = JSON.parse(await readFile(join(project.path, "package.json"), "utf8"));
+    expect(pkg.name).toBe("tasca-ze-porto");
+    expect(pkg.dependencies.next).toBeDefined();
+    expect(await readMetadata(project.path)).toMatchObject({ template: "base-next" });
+  });
+
+  it("keeps template folders disjoint from the shared folder", async () => {
+    const files = async (dir: string) =>
+      (await readdir(dir, { recursive: true, withFileTypes: true }))
+        .filter((e) => e.isFile())
+        .map((e) => relative(dir, join(e.parentPath, e.name)));
+    const shared = new Set(await files(join(templatesRoot, "shared")));
+    for (const template of ["base-vite-react", "base-next"]) {
+      const overlap = (await files(join(templatesRoot, template))).filter((f) => shared.has(f));
+      expect(overlap).toEqual([]);
+    }
+  });
+
   it("never touches an existing folder", async () => {
     const existing = join(parent, "tasca-ze-porto");
     await mkdir(existing);
     await writeFile(join(existing, "keep.txt"), "user file");
 
-    await expectCode(service().create(parent, details), "folder_exists");
+    await expectCode(service().create(parent, details, "base-vite-react"), "folder_exists");
     expect(await readFile(join(existing, "keep.txt"), "utf8")).toBe("user file");
     expect(await store.list()).toEqual([]);
   });
 
   it("rejects names that produce no folder name", async () => {
-    await expectCode(service().create(parent, { ...details, name: "???" }), "invalid_name");
+    await expectCode(
+      service().create(parent, { ...details, name: "???" }, "base-vite-react"),
+      "invalid_name",
+    );
   });
 
   it("removes the half-created folder when a step fails", async () => {
     const broken = new ProjectService({
       store,
-      templateDir: join(root, "no-template"),
+      templatesRoot: join(root, "no-templates"),
       git: fakeGit().runner,
     });
-    await expect(broken.create(parent, details)).rejects.toThrow();
+    await expect(broken.create(parent, details, "base-vite-react")).rejects.toThrow();
     expect(await exists(join(parent, "tasca-ze-porto"))).toBe(false);
   });
 
   it("still creates the project when git has no identity or fails", async () => {
     const noIdentity = fakeGit({ "config user.email": { ok: false } });
-    const first = await service(noIdentity.runner).create(parent, details);
+    const first = await service(noIdentity.runner).create(parent, details, "base-vite-react");
     expect(first.git).toEqual({ status: "no_identity" });
     expect(noIdentity.calls).not.toContain("add -A");
 
     const failing = fakeGit({ init: { ok: false, stderr: "git: command not found" } });
-    const second = await service(failing.runner).create(parent, { ...details, name: "Outro site" });
+    const second = await service(failing.runner).create(
+      parent,
+      { ...details, name: "Outro site" },
+      "base-vite-react",
+    );
     expect(second.git).toEqual({ status: "failed", detail: "git: command not found" });
     expect(await store.list()).toHaveLength(2);
   });
@@ -152,6 +193,8 @@ describe("ProjectService.import", () => {
 
   it("asks before writing metadata, then registers the folder", async () => {
     const dir = await reactFolder("loja-antiga", { devDependencies: { vite: "8" } });
+    const next = await reactFolder("loja-next", { dependencies: { react: "19", next: "16" } });
+    expect((await service().import(next, async () => true)).stack).toBe("next");
     const asked: string[] = [];
     const project = await service().import(dir, async (folder) => (asked.push(folder), true));
 
@@ -189,7 +232,7 @@ describe("ProjectService.import", () => {
   });
 
   it("reuses existing metadata without asking", async () => {
-    const { project } = await service().create(parent, details);
+    const { project } = await service().create(parent, details, "base-vite-react");
     await store.remove(project.id);
     const reimported = await service().import(project.path, async () => {
       throw new Error("should not ask");
@@ -210,7 +253,7 @@ describe("ProjectService.import", () => {
 
 describe("ProjectService update / archive / list", () => {
   it("updates details in metadata and registry without renaming the folder", async () => {
-    const { project } = await service().create(parent, details);
+    const { project } = await service().create(parent, details, "base-vite-react");
     const updated = await service().update(project.id, { ...details, name: "Tasca Nova" });
 
     expect(updated.name).toBe("Tasca Nova");
@@ -220,7 +263,7 @@ describe("ProjectService update / archive / list", () => {
   });
 
   it("archives and restores", async () => {
-    const { project } = await service().create(parent, details);
+    const { project } = await service().create(parent, details, "base-vite-react");
     await service().setArchived(project.id, true);
     expect((await service().get(project.id)).archived).toBe(true);
     await service().setArchived(project.id, false);
@@ -228,7 +271,7 @@ describe("ProjectService update / archive / list", () => {
   });
 
   it("flags projects whose folder disappeared", async () => {
-    const { project } = await service().create(parent, details);
+    const { project } = await service().create(parent, details, "base-vite-react");
     await rm(project.path, { recursive: true });
     const [listed] = await service().list();
     expect(listed).toMatchObject({ id: project.id, missing: true, name: details.name });
@@ -242,7 +285,7 @@ describe("ProjectService update / archive / list", () => {
 
 describe("JsonProjectStore", () => {
   it("survives a restart and serialises concurrent writes", async () => {
-    const first = await service().create(parent, details);
+    const first = await service().create(parent, details, "base-vite-react");
     await Promise.all([
       service().setArchived(first.project.id, true),
       service().markOpened(first.project.id),

@@ -43,6 +43,34 @@ cooldown). When the newest release was too recent, the newest older release was 
 pnpm build scripts: `esbuild` allowed (verifies its platform binary); `@vscode/vsce-sign` denied
 (signing is not used).
 
+## 2b. Milestone A additions (pinned 2026-11-07, same two-week rule)
+
+| Package                                        | Version | License    | Where     | Why                                                                                                                                                                         |
+| ---------------------------------------------- | ------- | ---------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| electron                                       | 45.0.0  | MIT        | desktop   | Current stable major (Node 24.22, Chromium 156); 43–45 supported. Defaults: `contextIsolation` and `sandbox` on, `nodeIntegration` off. Downloads its runtime on first use. |
+| @electron-forge/cli, @electron-forge/maker-zip | 8.0.1   | MIT        | desktop   | Packager recommended by the Electron docs. Used only to package the already-bundled `dist/` (no `node_modules`, `prune: false`).                                            |
+| @playwright/test                               | 1.64.1  | Apache-2.0 | desktop   | Drives the real Electron app (`_electron.launch`); no browser download needed.                                                                                              |
+| next (template)                                | 16.4.3  | MIT        | base-next | Turbopack is the default for `next dev`/`next build` in Next 16.                                                                                                            |
+| @tailwindcss/postcss (template)                | 4.3.3   | MIT        | base-next | Same Tailwind setup as Midi8's Next sites.                                                                                                                                  |
+| typescript (Next template)                     | 5.9.3   | Apache-2.0 | base-next | Matches Midi8's sites (`^5`); Next 16 + TS 6 not verified.                                                                                                                  |
+
+Facts used (accessed 2026-11-07):
+
+- Electron security checklist: CSP, validate IPC `senderFrame`, set permission handlers (Electron
+  approves all permission requests by default otherwise), limit navigation and new windows,
+  prefer custom protocols over `file://`. <https://www.electronjs.org/docs/latest/tutorial/security>
+- `safeStorage`: the synchronous API is deprecated and will be removed in Electron 46; use
+  `encryptStringAsync`/`decryptStringAsync`. Keychain (macOS), DPAPI (Windows), kwallet/libsecret
+  (Linux, `basic_text` = hard-coded key fallback). macOS apps should be signed for consistent
+  behaviour. <https://www.electronjs.org/docs/latest/api/safe-storage>
+- macOS distribution needs code signing and notarization.
+  <https://www.electronjs.org/docs/latest/tutorial/code-signing>
+- Turbopack `turbopack.rules`: only a subset of the webpack loader API; loaders must return
+  JavaScript. <https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopack>
+- node-pty (Milestone B): MIT, native C++ build, Windows needs ConPTY (1809+).
+  <https://github.com/microsoft/node-pty>
+- Next dev writes an `AGENTS.md` into generated projects on first run (seen in a real run).
+
 ## 3. FreeLLMAPI
 
 - Repository: <https://github.com/tashfeenahmed/freellmapi> (the original; forks with the same

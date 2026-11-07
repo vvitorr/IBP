@@ -4,7 +4,7 @@ import type { Locale } from "@ibp/shared";
 
 /**
  * Builds the Studio page. The CSP allows only our bundled script (by nonce) and our own
- * stylesheet/images; no inline scripts, no remote origins, no frames in Phase 1.
+ * stylesheet/images; no inline scripts, no remote origins; frames only from the loopback preview.
  */
 export function renderStudioHtml(
   webview: vscode.Webview,
@@ -20,6 +20,8 @@ export function renderStudioHtml(
     `style-src ${webview.cspSource}`,
     `font-src ${webview.cspSource}`,
     `script-src 'nonce-${nonce}'`,
+    // The live preview: the project's own dev server, which only listens on loopback.
+    "frame-src http://127.0.0.1:*",
   ].join("; ");
 
   return `<!doctype html>
