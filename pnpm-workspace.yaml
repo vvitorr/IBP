@@ -1,0 +1,9 @@
+packages:
+  - apps/*
+  - packages/*
+# templates/* are copied into user projects and installed there with npm; they are not workspace packages.
+
+# esbuild's postinstall only verifies its platform binary. vsce-sign is not needed to package.
+allowBuilds:
+  esbuild: true
+  "@vscode/vsce-sign": false

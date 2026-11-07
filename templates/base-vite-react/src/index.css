@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+/* Brand tokens: change these to restyle the whole site. */
+@theme {
+  --color-brand: #1f4e45;
+  --color-brand-contrast: #ffffff;
+  --color-ink: #1d1d1b;
+  --color-soft: #5c5c57;
+  --color-paper: #fbfaf7;
+  --color-line: #e4e2dc;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: Georgia, "Times New Roman", serif;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+}

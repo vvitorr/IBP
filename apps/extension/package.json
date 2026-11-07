@@ -1,0 +1,86 @@
+{
+  "name": "ibp",
+  "displayName": "IBP — Intent Based Programming",
+  "description": "%ext.description%",
+  "version": "0.1.0",
+  "publisher": "vvitorr",
+  "private": true,
+  "engines": {
+    "vscode": "^1.125.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "workspaceContains:.ibp/project.json"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "ibp.openStudio",
+        "title": "%cmd.openStudio%",
+        "category": "IBP"
+      },
+      {
+        "command": "ibp.newProject",
+        "title": "%cmd.newProject%",
+        "category": "IBP"
+      }
+    ],
+    "configuration": {
+      "title": "IBP",
+      "properties": {
+        "ibp.language": {
+          "type": "string",
+          "enum": [
+            "pt-PT",
+            "en"
+          ],
+          "default": "pt-PT",
+          "description": "%cfg.language%"
+        },
+        "ibp.mode": {
+          "type": "string",
+          "enum": [
+            "beginner",
+            "developer"
+          ],
+          "default": "beginner",
+          "description": "%cfg.mode%"
+        },
+        "ibp.theme": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "dark",
+            "light"
+          ],
+          "default": "dark",
+          "description": "%cfg.theme%"
+        },
+        "ibp.projectsRoot": {
+          "type": "string",
+          "default": "",
+          "description": "%cfg.projectsRoot%"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "build:tests": "node build.mjs --tests",
+    "test:ext": "node build.mjs --tests && vscode-test",
+    "package": "vsce package --no-dependencies --skip-license --allow-missing-repository --out ibp.vsix"
+  },
+  "devDependencies": {
+    "@ibp/shared": "workspace:*",
+    "@types/mocha": "10.0.10",
+    "@types/vscode": "1.125.0",
+    "@vscode/test-cli": "0.0.15",
+    "@vscode/test-electron": "3.1.0",
+    "@vscode/vsce": "4.0.0",
+    "esbuild": "0.28.2",
+    "zod": "4.6.7"
+  }
+}

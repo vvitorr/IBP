@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+/* IBP design tokens. Dark is the default; light is complete so the theme switch is real. */
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --ibp-bg: #111213;
+  --ibp-surface: #17181a;
+  --ibp-raised: #1f2023;
+  --ibp-border: #2a2c30;
+  --ibp-text: #e7e7e3;
+  --ibp-muted: #9b9c97;
+  --ibp-accent: #c4e456;
+  --ibp-accent-ink: #141600;
+  --ibp-danger: #f07167;
+  --ibp-warning: #e9b949;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --ibp-bg: #efefeb;
+  --ibp-surface: #f8f8f5;
+  --ibp-raised: #ffffff;
+  --ibp-border: #d9d9d2;
+  --ibp-text: #1b1c1d;
+  --ibp-muted: #5e5f5a;
+  --ibp-accent: #4b6600;
+  --ibp-accent-ink: #ffffff;
+  --ibp-danger: #b3261e;
+  --ibp-warning: #855400;
+}
+
+@theme inline {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --color-bg: var(--ibp-bg);
+  --color-surface: var(--ibp-surface);
+  --color-raised: var(--ibp-raised);
+  --color-line: var(--ibp-border);
+  --color-text: var(--ibp-text);
+  --color-muted: var(--ibp-muted);
+  --color-accent: var(--ibp-accent);
+  --color-accent-ink: var(--ibp-accent-ink);
+  --color-danger: var(--ibp-danger);
+  --color-warning: var(--ibp-warning);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--ibp-bg);
+    color: var(--ibp-text);
+    font: 13px/1.45 var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ibp-accent);
+    outline-offset: 1px;
+  }
+
+  input,
+  select,
+  textarea {
+    background: var(--ibp-raised);
+    border: 1px solid var(--ibp-border);
+    border-radius: 4px;
+    color: var(--ibp-text);
+    padding: 6px 8px;
+    font: inherit;
+  }
+
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline-offset: 0;
+    border-color: var(--ibp-accent);
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "ext.description": "Build, edit and maintain React websites with intent-driven AI assistance and real source code.",
+  "cmd.openStudio": "Open Studio",
+  "cmd.newProject": "New Website Project",
+  "cfg.language": "Language of the IBP interface.",
+  "cfg.mode": "Beginner mode shows the guided Studio; developer mode also surfaces source-code actions.",
+  "cfg.theme": "IBP Studio theme. 'auto' follows the VS Code theme.",
+  "cfg.projectsRoot": "Default folder suggested when creating new website projects. Empty means your home folder."
+}
