@@ -1,13 +1,24 @@
-// Bundles the extension host (and, with --tests, the integration tests) and copies the site template.
+// Bundles the extension host (and, with --tests, the integration tests) and copies the Studio UI
+// and the site templates into dist/.
 import { build } from "esbuild";
 import { cp, rm } from "node:fs/promises";
 import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = dirname(fileURLToPath(import.meta.url));
-const templateSrc = join(root, "..", "..", "templates", "base-vite-react");
-const templateOut = join(root, "dist", "templates", "base-vite-react");
-const skipped = new Set(["node_modules", "dist"]);
+const templatesSrc = join(root, "..", "..", "templates");
+const webviewSrc = join(root, "..", "webview", "dist");
+const skipped = new Set(["node_modules", "dist", ".next"]);
+const copy = async (from, to) => {
+  await rm(to, { recursive: true, force: true });
+  await cp(from, to, {
+    recursive: true,
+    filter: (source) =>
+      !relative(from, source)
+        .split(sep)
+        .some((part) => skipped.has(part)),
+  });
+};
 
 const common = {
   bundle: true,
@@ -25,14 +36,8 @@ await build({
   outfile: join(root, "dist", "extension.js"),
 });
 
-await rm(templateOut, { recursive: true, force: true });
-await cp(templateSrc, templateOut, {
-  recursive: true,
-  filter: (source) =>
-    !relative(templateSrc, source)
-      .split(sep)
-      .some((part) => skipped.has(part)),
-});
+await copy(templatesSrc, join(root, "dist", "templates"));
+await copy(webviewSrc, join(root, "dist", "webview")); // build apps/webview first
 
 if (process.argv.includes("--tests")) {
   await rm(join(root, "out"), { recursive: true, force: true });

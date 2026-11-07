@@ -2,15 +2,15 @@
 
 ## Trust zones
 
-| Zone                      | Trust                      | Can do                                        | Must never                                                                                  |
-| ------------------------- | -------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Extension host            | Trusted                    | File system, git, terminals, network, secrets | Execute input from other zones without validation and, for high-risk actions, user approval |
-| Studio webview            | Untrusted UI               | Send typed requests                           | Hold secrets, send paths, run commands                                                      |
-| Preview iframe (Phase 4+) | Untrusted (generated code) | Post selection events to the Studio           | Reach the host directly or trigger privileged actions                                       |
-| LLM output (Phase 2+)     | Untrusted                  | Propose tool calls                            | Run high-risk tools without approval                                                        |
-| Project files             | Untrusted input            | Be read as data                               | Be treated as instructions or executed by IBP                                               |
+| Zone                                                   | Trust                      | Can do                                           | Must never                                                                                  |
+| ------------------------------------------------------ | -------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| Host (Electron main process or VS Code extension host) | Trusted                    | File system, git, processes, network, secrets    | Execute input from other zones without validation and, for high-risk actions, user approval |
+| Studio UI (renderer / webview)                         | Untrusted UI               | Send typed requests                              | Hold secrets, send paths or URLs, run commands                                              |
+| Preview iframe                                         | Untrusted (generated code) | Render the site; post selection events (Phase 5) | Reach the host directly or trigger privileged actions                                       |
+| LLM output (Phase 2+)                                  | Untrusted                  | Propose tool calls                               | Run high-risk tools without approval                                                        |
+| Project files                                          | Untrusted input            | Be read as data                                  | Be treated as instructions or executed by IBP                                               |
 
-## Controls in place (Phase 1)
+## Controls in place (Phase 1 + Milestone A)
 
 - **Webview CSP:** `default-src 'none'`; scripts only by per-load nonce; styles, images and fonts
   only from the extension's `dist/webview`; no frames, no remote origins.
@@ -31,29 +31,54 @@
   as a fixed string in a visible terminal whose `cwd` comes from the registry.
 - **Untrusted files:** `.ibp/project.json` and the registry are schema-validated when read; a
   damaged registry is moved aside instead of overwritten.
-- **Secrets:** none stored in Phase 1. Settings and metadata contain no credentials.
+- **Secrets:** none stored yet. Settings and metadata contain no credentials.
+- **Desktop app (Electron):** Studio served from `ibp://studio` (custom secure scheme, file
+  lookups confined to the bundled renderer folder), `contextIsolation`, `sandbox`, no
+  `nodeIntegration`; preload exposes only `postMessage`/`onMessage`; the main process accepts IPC
+  only from its own window's `ibp://studio/…` frame; all permission requests and checks denied;
+  `will-navigate` blocked; new windows denied; CSP
+  `default-src 'none'; script-src 'self'; style-src 'self'; frame-src http://127.0.0.1:*;
+connect-src 'none'`. Single-instance lock so two windows never write the same registry.
+- **Preview:** dev servers bind to `127.0.0.1` on a free port; the iframe is cross-origin and
+  sandboxed (`allow-scripts allow-same-origin allow-forms`: no top navigation, no popups); the
+  Studio drops window messages from `http://127.0.0.1`; preview URLs in state must match
+  `http://127.0.0.1:<port>/`; "Open in browser" only opens the running preview URL, never one sent
+  by the UI.
+- **Processes:** `npm` runs with argument arrays and no shell (macOS/Linux) in its own process
+  group, killed as a group (SIGTERM, then SIGKILL after 5 s) on stop, project switch and window
+  close. On Windows npm needs a shell; arguments are fixed values (to be revisited in Phase 8).
+- **Login-shell PATH:** apps opened from the Dock lack the user's PATH, so IBP runs
+  `$SHELL -ilc` once to read it (as VS Code does). This executes the user's shell startup files
+  with the user's rights.
+- **Test hooks:** `IBP_TEST_MODE=1` makes the desktop folder picker and confirmations answer from
+  environment variables. Anyone who can set the app's environment already controls the process.
 
 ## Planned controls
 
-- Phase 2: API keys only in `SecretStorage`; never logged, never sent to the webview (the UI sees
+- Phase 2: API keys only in `SecretStorage` (VS Code) / Electron `safeStorage` async API (desktop;
+  on Linux without a keyring it falls back to a hard-coded key, so warn the user); never logged, never sent to the webview (the UI sees
   "configured: yes/no"); redact keys from error details.
 - Phase 3: tool registry with risk levels. Approval required for: deleting files, installing
   packages, editing config/deploy/env files, running shell commands, network access. File tools
   resolve real paths and refuse anything outside the project root (symlink-aware). Context
   collector excludes `.env*`, keys, `node_modules`, build output and binaries.
-- Phase 4/5: preview iframe on its own origin; Studio accepts only `selection` messages from the
-  iframe's `event.source`; CSP `frame-src` limited to the dev server origin.
+- Phase 5: Studio accepts only `selection` messages from the preview iframe, validated by schema.
 - Phase 7: deploy tokens in `SecretStorage`; production deploys need explicit approval; tokens
   never reach the generated site.
 
 ## Known limitations
 
-- **No OS sandbox.** The extension and anything it launches run with the user's permissions.
+- **No OS sandbox.** The host and anything it launches (npm, dev servers) run with the user's
+  permissions.
+- **Unsigned desktop builds.** macOS Gatekeeper warns until the app is signed and notarized
+  (needs an Apple Developer ID).
 - **`npm install` runs lifecycle scripts** of the generated project's dependencies.
 - **The dev server listens on localhost**, reachable by other local processes.
 - **Free model providers may log prompts** (FreeLLMAPI notes this for FreeInference). Users must
   not send client secrets or personal data through them.
 - **Prompt injection:** project files or web content can contain instructions aimed at the agent.
   Approvals for high-risk tools are the backstop; the agent must treat file content as data.
+- **VS Code preview iframe** to `127.0.0.1` relies on VS Code webviews allowing loopback frames;
+  verified in the desktop app, not yet by an automated VS Code test.
 - **`vscode.openFolder` reloads the window**, so unsaved editor state follows VS Code's normal
   behaviour (VS Code prompts before losing changes).

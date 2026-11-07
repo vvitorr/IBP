@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="pt-PT">
+  <head>
+    <meta charset="utf-8" />
+    <!-- Only our own bundle; frames only from the loopback dev server (the live preview). -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; frame-src http://127.0.0.1:*; connect-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="./assets/main.css" />
+    <title>IBP Studio</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./assets/main.js"></script>
+  </body>
+</html>

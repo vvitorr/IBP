@@ -13,6 +13,7 @@ export default defineConfig(
       "**/out/**",
       "**/.vscode-test/**",
       "templates/**",
+      "**/test-results/**",
     ],
   },
   js.configs.recommended,
@@ -25,6 +26,7 @@ export default defineConfig(
   {
     files: [
       "apps/extension/**/*.{ts,mjs}",
+      "apps/desktop/**/*.{ts,mjs,cjs}",
       "packages/**/*.ts",
       "*.{ts,mjs}",
       "apps/webview/vite.config.ts",

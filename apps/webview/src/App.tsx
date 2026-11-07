@@ -1,8 +1,16 @@
 import { useEffect, useState } from "react";
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
-import { DEFAULT_LOCALE, type AppError, type Settings, type StateMessage } from "@ibp/shared";
+import {
+  DEFAULT_LOCALE,
+  type AppError,
+  type PreviewState,
+  type Settings,
+  type StateMessage,
+  translate,
+} from "@ibp/shared";
 import { CreateProject } from "./components/CreateProject";
 import { ErrorNotice } from "./components/ErrorNotice";
+import { PreviewPane } from "./components/PreviewPane";
 import { ProjectList } from "./components/ProjectList";
 import { ProjectOverview } from "./components/ProjectOverview";
 import { PropertiesPanel } from "./components/PropertiesPanel";
@@ -12,21 +20,33 @@ import { LocaleContext } from "./i18n";
 
 const DEFAULT_SETTINGS: Settings = { language: DEFAULT_LOCALE, mode: "beginner", theme: "dark" };
 
-function isVsCodeLight(): boolean {
+const IDLE_PREVIEW: PreviewState = { projectId: null, status: "stopped", url: null, log: [] };
+const lightQuery = window.matchMedia("(prefers-color-scheme: light)");
+
+/** In VS Code the theme is a class on <body>; in the desktop app it is the OS setting. */
+function isHostLight(): boolean {
   const classes = document.body.classList;
-  return classes.contains("vscode-light") || classes.contains("vscode-high-contrast-light");
+  if ([...classes].some((c) => c.startsWith("vscode-"))) {
+    return classes.contains("vscode-light") || classes.contains("vscode-high-contrast-light");
+  }
+  return lightQuery.matches;
 }
 
-/** "auto" follows the VS Code theme, which VS Code exposes as a class on <body>. */
+/** "auto" follows the host theme. */
 function useResolvedTheme(theme: Settings["theme"]): "dark" | "light" {
-  const [vscodeLight, setVscodeLight] = useState(isVsCodeLight);
+  const [hostLight, setHostLight] = useState(isHostLight);
   useEffect(() => {
-    const observer = new MutationObserver(() => setVscodeLight(isVsCodeLight()));
+    const update = () => setHostLight(isHostLight());
+    const observer = new MutationObserver(update);
     observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
-    return () => observer.disconnect();
+    lightQuery.addEventListener("change", update);
+    return () => {
+      observer.disconnect();
+      lightQuery.removeEventListener("change", update);
+    };
   }, []);
   if (theme !== "auto") return theme;
-  return vscodeLight ? "light" : "dark";
+  return hostLight ? "light" : "dark";
 }
 
 const separatorClass = "w-px bg-line transition-colors hover:bg-accent focus-visible:bg-accent";
@@ -35,6 +55,7 @@ export function App() {
   const [state, setState] = useState<StateMessage | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [tab, setTab] = useState<"preview" | "project">("preview");
   const [error, setError] = useState<AppError | null>(null);
   const [busy, setBusy] = useState(false);
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
@@ -43,6 +64,7 @@ export function App() {
   });
 
   const settings = state?.settings ?? DEFAULT_SETTINGS;
+  const t = (key: Parameters<typeof translate>[1]) => translate(settings.language, key);
   const theme = useResolvedTheme(settings.theme);
 
   useEffect(() => {
@@ -67,6 +89,9 @@ export function App() {
     projects?.find((p) => !p.archived) ??
     null;
   const showCreate = creating || projects?.length === 0;
+  const preview = state?.preview ?? IDLE_PREVIEW;
+  const withSelected = (type: "preview/start" | "projects/installDeps") =>
+    selected && void run({ type, id: selected.id });
 
   async function run(input: RequestInput): Promise<boolean> {
     setBusy(true);
@@ -113,30 +138,75 @@ export function App() {
           </Panel>
           <Separator className={separatorClass} />
           <Panel id="workspace" minSize="30">
-            <main className="h-full overflow-y-auto">
+            <main className="h-full overflow-hidden">
               {showCreate ? (
-                <CreateProject
-                  busy={busy}
-                  onCancel={projects?.length ? () => setCreating(false) : null}
-                  onSubmit={(details) =>
-                    void run({ type: "projects/create", details }).then(
-                      (ok) => ok && setCreating(false),
-                    )
-                  }
-                />
+                <div className="h-full overflow-y-auto">
+                  <CreateProject
+                    busy={busy}
+                    onCancel={projects?.length ? () => setCreating(false) : null}
+                    onSubmit={(details, template) =>
+                      void run({ type: "projects/create", details, template }).then(
+                        (ok) => ok && setCreating(false),
+                      )
+                    }
+                  />
+                </div>
               ) : (
-                <ProjectOverview
-                  project={selected}
-                  isCurrent={selected?.id === currentProjectId}
-                  mode={settings.mode}
-                  busy={busy}
-                  onCreate={() => setCreating(true)}
-                  onAction={(type) => selected && void run({ type, id: selected.id })}
-                  onArchive={(archived) =>
-                    selected &&
-                    void run({ type: "projects/setArchived", id: selected.id, archived })
-                  }
-                />
+                <div className="flex h-full flex-col">
+                  <div
+                    role="tablist"
+                    className="flex h-9 shrink-0 items-end gap-1 border-b border-line px-2"
+                  >
+                    {(["preview", "project"] as const).map((key) => (
+                      <button
+                        key={key}
+                        type="button"
+                        role="tab"
+                        aria-selected={tab === key}
+                        onClick={() => setTab(key)}
+                        className={`-mb-px border-b-2 px-3 py-1.5 text-[12px] ${
+                          tab === key
+                            ? "border-accent text-text"
+                            : "border-transparent text-muted hover:text-text"
+                        }`}
+                      >
+                        {key === "preview" ? t("tab.preview") : t("tab.project")}
+                      </button>
+                    ))}
+                  </div>
+                  <div role="tabpanel" className="min-h-0 flex-1 overflow-y-auto">
+                    {tab === "preview" ? (
+                      <PreviewPane
+                        project={selected}
+                        preview={preview}
+                        previewProjectName={
+                          projects?.find((p) => p.id === preview.projectId)?.name ?? null
+                        }
+                        mode={settings.mode}
+                        busy={busy}
+                        onStart={() => withSelected("preview/start")}
+                        onInstall={() => withSelected("projects/installDeps")}
+                        onStop={() => void run({ type: "preview/stop" })}
+                        onRestart={() => void run({ type: "preview/restart" })}
+                        onOpenExternal={() => void run({ type: "preview/openExternal" })}
+                      />
+                    ) : (
+                      <ProjectOverview
+                        project={selected}
+                        isCurrent={selected?.id === currentProjectId}
+                        mode={settings.mode}
+                        terminal={state?.capabilities.terminal ?? false}
+                        busy={busy}
+                        onCreate={() => setCreating(true)}
+                        onAction={(type) => selected && void run({ type, id: selected.id })}
+                        onArchive={(archived) =>
+                          selected &&
+                          void run({ type: "projects/setArchived", id: selected.id, archived })
+                        }
+                      />
+                    )}
+                  </div>
+                </div>
               )}
             </main>
           </Panel>

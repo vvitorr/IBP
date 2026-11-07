@@ -20,6 +20,7 @@ export function ProjectOverview({
   project,
   isCurrent,
   mode,
+  terminal,
   busy,
   onAction,
   onArchive,
@@ -28,6 +29,8 @@ export function ProjectOverview({
   project: ProjectSummary | null;
   isCurrent: boolean;
   mode: Settings["mode"];
+  /** Whether this host can open a terminal (VS Code yes, desktop app not yet). */
+  terminal: boolean;
   busy: boolean;
   onAction: (type: Exclude<Action, "projects/update" | "projects/setArchived">) => void;
   onArchive: (archived: boolean) => void;
@@ -129,13 +132,15 @@ export function ProjectOverview({
               >
                 {t("action.openCode")}
               </Button>
-              <Button
-                disabled={disabled}
-                icon={<SquareTerminal size={14} aria-hidden />}
-                onClick={() => onAction("projects/openTerminal")}
-              >
-                {t("action.openTerminal")}
-              </Button>
+              {terminal && (
+                <Button
+                  disabled={disabled}
+                  icon={<SquareTerminal size={14} aria-hidden />}
+                  onClick={() => onAction("projects/openTerminal")}
+                >
+                  {t("action.openTerminal")}
+                </Button>
+              )}
             </>
           )}
           <Button

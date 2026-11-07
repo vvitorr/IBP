@@ -1,0 +1,14 @@
+{
+  "name": "@ibp/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Host-agnostic IBP services (projects, templates, dev server, Studio controller). Node only: no vscode or electron imports.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@ibp/shared": "workspace:*",
+    "zod": "4.6.7"
+  }
+}

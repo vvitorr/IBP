@@ -2,9 +2,11 @@
 
 Build, edit and maintain React websites with AI assistance while keeping real, readable source code.
 
-This is an early development build (Phase 1). It can create a website project from the IBP
-starter template, import an existing React project and manage your project list. AI chat,
-live preview and click-to-edit arrive in later phases; see `docs/roadmap.md` in the repository.
+This is an early development build (Milestone A). It can create a Vite + React or Next.js website
+from the IBP starters, import an existing React project, manage your project list, install
+dependencies and show the real site in a live preview at desktop, tablet and mobile sizes. AI chat
+and click-to-edit arrive in later phases; see `docs/roadmap.md` in the repository. The same
+Studio also ships as the IBP desktop app.
 
 ## Commands
 

@@ -1,5 +1,6 @@
 /**
- * Messages between the extension host (trusted) and the Studio webview (untrusted UI).
+ * Messages between the host (VS Code extension or desktop main process, trusted) and the Studio
+ * UI (untrusted).
  * Both sides validate every message with these schemas before acting on it.
  * The webview sends project ids, never file paths: folders are always chosen host-side.
  */
@@ -20,6 +21,10 @@ export const INDUSTRIES = [
   "other",
 ] as const;
 export type Industry = (typeof INDUSTRIES)[number];
+
+/** Starter templates; each one is a folder under templates/ (plus templates/shared). */
+export const TEMPLATE_IDS = ["base-vite-react", "base-next"] as const;
+export type TemplateId = (typeof TEMPLATE_IDS)[number];
 
 export const projectIdSchema = z.uuid();
 const requestIdSchema = z.string().min(1).max(64);
@@ -57,6 +62,7 @@ export const webviewMessageSchema = z.discriminatedUnion("type", [
     type: z.literal("projects/create"),
     requestId: requestIdSchema,
     details: projectDetailsSchema,
+    template: z.enum(TEMPLATE_IDS),
   }),
   z.strictObject({ type: z.literal("projects/import"), requestId: requestIdSchema }),
   withId("projects/open"),
@@ -80,6 +86,11 @@ export const webviewMessageSchema = z.discriminatedUnion("type", [
     requestId: requestIdSchema,
     update: settingUpdateSchema,
   }),
+  withId("preview/start"),
+  z.strictObject({ type: z.literal("preview/stop"), requestId: requestIdSchema }),
+  z.strictObject({ type: z.literal("preview/restart"), requestId: requestIdSchema }),
+  // Opens the running preview's own URL; the webview never supplies a URL.
+  z.strictObject({ type: z.literal("preview/openExternal"), requestId: requestIdSchema }),
 ]);
 export type WebviewMessage = z.infer<typeof webviewMessageSchema>;
 export type WebviewRequest = Exclude<WebviewMessage, { type: "ready" }>;
@@ -95,6 +106,11 @@ export const ERROR_CODES = [
   "folder_missing",
   "invalid_metadata",
   "io_error",
+  "deps_missing",
+  "install_failed",
+  "preview_failed",
+  "preview_unsupported",
+  "command_not_found",
   "unknown",
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -111,6 +127,11 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, MessageKey> = {
   folder_missing: "error.folderMissing",
   invalid_metadata: "error.invalidMetadata",
   io_error: "error.io",
+  deps_missing: "error.depsMissing",
+  install_failed: "error.installFailed",
+  preview_failed: "error.previewFailed",
+  preview_unsupported: "error.previewUnsupported",
+  command_not_found: "error.commandNotFound",
   unknown: "error.unknown",
 };
 
@@ -134,6 +155,28 @@ export const projectSummarySchema = z.strictObject({
 });
 export type ProjectSummary = z.infer<typeof projectSummarySchema>;
 
+export const PREVIEW_STATUSES = ["stopped", "installing", "starting", "running", "error"] as const;
+export type PreviewStatus = (typeof PREVIEW_STATUSES)[number];
+export const PREVIEW_LOG_LINES = 200;
+
+/** Dev servers only ever listen on loopback; anything else is rejected. */
+export const previewUrlSchema = z.string().regex(/^http:\/\/127\.0\.0\.1:\d{1,5}\/$/);
+
+export const previewStateSchema = z.strictObject({
+  projectId: projectIdSchema.nullable(),
+  status: z.enum(PREVIEW_STATUSES),
+  url: previewUrlSchema.nullable(),
+  log: z.array(z.string().max(2000)).max(PREVIEW_LOG_LINES),
+  error: appErrorSchema.optional(),
+});
+export type PreviewState = z.infer<typeof previewStateSchema>;
+
+export const HOST_KINDS = ["vscode", "desktop"] as const;
+export type HostKind = (typeof HOST_KINDS)[number];
+
+export const capabilitiesSchema = z.strictObject({ terminal: z.boolean() });
+export type Capabilities = z.infer<typeof capabilitiesSchema>;
+
 const responseSchema = z.discriminatedUnion("ok", [
   z.strictObject({
     type: z.literal("response"),
@@ -155,6 +198,9 @@ export const hostMessageSchema = z.union([
     settings: settingsSchema,
     projects: z.array(projectSummarySchema),
     currentProjectId: projectIdSchema.nullable(),
+    host: z.enum(HOST_KINDS),
+    capabilities: capabilitiesSchema,
+    preview: previewStateSchema,
   }),
   z.strictObject({ type: z.literal("navigate"), view: z.enum(["create"]) }),
   responseSchema,
