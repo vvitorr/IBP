@@ -10,6 +10,7 @@ import {
   StudioController,
 } from "@ibp/core";
 import { createDesktopHost } from "./desktopHost";
+import { SafeSecretVault } from "./secretVault";
 import { SettingsStore } from "./settings";
 
 if (process.env.IBP_TEST_MODE === "1" && process.env.IBP_USER_DATA) {
@@ -70,7 +71,10 @@ async function createWindow(): Promise<void> {
   });
 
   const controller = new StudioController({
-    host: createDesktopHost(win, settings),
+    host: createDesktopHost(win, settings, {
+      dataDir: userData,
+      secrets: new SafeSecretVault(join(userData, "secrets.json")),
+    }),
     service,
     runner: nodeProcessRunner,
     env: resolveShellEnv,

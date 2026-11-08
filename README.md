@@ -8,7 +8,8 @@ IBP ships as a **desktop app** (Electron) and as a **VS Code extension** (VS Cod
 VSCodium). Both share the same core and features. Generated sites use **Vite + React** or
 **Next.js**, with TypeScript and Tailwind CSS.
 
-**Status:** Milestone A (desktop app, Next.js template, live preview). See
+**Status:** Milestone A (desktop app, Next.js template, live preview) and Phase 2 (AI providers
+with secure keys, routing and a streaming assistant). See
 [docs/roadmap.md](docs/roadmap.md).
 
 ## Requirements
@@ -45,12 +46,13 @@ Then run **IBP: Open Studio** from the Command Palette.
 
 ## Repository
 
-| Path              | Contents                                                                    |
-| ----------------- | --------------------------------------------------------------------------- |
-| `apps/desktop`    | Desktop app (Electron main process, preload, packaging)                     |
-| `apps/extension`  | VS Code extension                                                           |
-| `apps/webview`    | IBP Studio UI (React), used by both                                         |
-| `packages/core`   | Host-agnostic services: Studio controller, projects, templates, dev servers |
-| `packages/shared` | Message protocol and translations                                           |
-| `templates/`      | Starter websites: `shared` sections + `base-vite-react` / `base-next`       |
-| `docs/`           | Architecture, decisions, security, research, roadmap                        |
+| Path                    | Contents                                                                                |
+| ----------------------- | --------------------------------------------------------------------------------------- |
+| `apps/desktop`          | Desktop app (Electron main process, preload, packaging)                                 |
+| `apps/extension`        | VS Code extension                                                                       |
+| `apps/webview`          | IBP Studio UI (React), used by both                                                     |
+| `packages/core`         | Host-agnostic services: Studio controller, projects, templates, dev servers, AI service |
+| `packages/model-router` | Model layer: OpenAI-compatible client, presets, probes, router                          |
+| `packages/shared`       | Message protocol and translations                                                       |
+| `templates/`            | Starter websites: `shared` sections + `base-vite-react` / `base-next`                   |
+| `docs/`                 | Architecture, decisions, security, research, roadmap                                    |

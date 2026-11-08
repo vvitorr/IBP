@@ -5,6 +5,7 @@ import {
   resolveShellEnv,
   StudioController,
   type ProjectService,
+  type SecretVault,
 } from "@ibp/core";
 import { readSettings } from "../config";
 import { createVsCodeHost } from "../vscodeHost";
@@ -15,6 +16,9 @@ export interface StudioDeps {
   /** dist/webview inside the extension: the only folder the webview may load files from. */
   webviewRoot: vscode.Uri;
   log: vscode.LogOutputChannel;
+  /** globalStorage folder: AI settings and usage. */
+  dataDir: string;
+  secrets: SecretVault;
 }
 
 const title = () => translate(readSettings().language, "host.studioTitle");
@@ -59,7 +63,7 @@ export class StudioPanel {
     deps: StudioDeps,
   ) {
     this.controller = new StudioController({
-      host: createVsCodeHost(panel, deps.log),
+      host: createVsCodeHost(panel, deps.log, { dataDir: deps.dataDir, secrets: deps.secrets }),
       service: deps.service,
       runner: nodeProcessRunner,
       env: resolveShellEnv,

@@ -153,3 +153,39 @@ was made. Facts cited here are sourced in [`../research/dependencies.md`](../res
   `sandbox`, no `nodeIntegration`, CSP in the page, one IPC channel whose sender frame must be
   `ibp://studio/…`, all permission requests denied, navigation and new windows blocked.
 - Dependencies (main, preload) are bundled by esbuild; the packaged app ships no `node_modules`.
+
+## ADR-019 — Own OpenAI-compatible client, no SDK (2026-11-08)
+
+- **Decision:** `packages/model-router` talks to providers with `fetch` + a small SSE reader
+  (`/v1/models`, `/v1/chat/completions` with `stream: true` and `stream_options.include_usage`).
+  It covers OpenRouter, Ollama, LM Studio, FreeLLMAPI, LiteLLM and any custom OpenAI-compatible
+  endpoint behind one `ModelProvider` interface.
+- **Rejected:** the `openai` SDK — its retries would be disabled (the router owns fallback) and its
+  OpenAI-specific features are unused; Vercel AI SDK — more abstraction than needed now and
+  tied to its own tool loop, while Phase 3 needs IBP's own approvals.
+- **Consequences:** provider quirks are handled in one place (SSE comment keep-alives, errors sent
+  mid-stream, missing usage). Native Anthropic/Gemini adapters can be added behind the interface.
+
+## ADR-020 — Where AI data lives (2026-11-08)
+
+- Provider list, model capabilities, preferences: `ai.json` in the host data folder (desktop
+  `userData`, VS Code `globalStorageUri`). Usage: `usage.jsonl` (no prompts or answers).
+- API keys only through `HostPlatform.secrets`: desktop `safeStorage` async API → ciphertext in
+  `secrets.json` (decryption key in the OS keychain); VS Code `SecretStorage`. Keys never reach
+  the Studio UI (it sees `hasKey`), logs or error details (redacted). No secure storage → keys
+  are refused; Linux `basic_text` → saved with a visible "weak protection" warning.
+- **Rejected:** keys in settings files, project files, `localStorage` or environment variables.
+
+## ADR-021 — Routing policy (2026-11-08)
+
+- Candidates: the user's ordered preference list (auto mode) or one chosen model, filtered by task
+  requirements (tools, minimum context) and cooldowns. Capabilities come from provider metadata
+  (OpenRouter `supported_parameters`, `context_length`, pricing) or an explicit probe — never
+  assumed from "OpenAI-compatible".
+- Before the first token a failure moves to the next candidate and pauses the failing
+  provider (429: `Retry-After` or 60 s; bad key: 10 min) or model (5xx/network 30 s; 400/404
+  60 s). The same model is never retried, to spare free quotas. After the first token: stop
+  with "interrupted" — no answers stitched from two models.
+- After the first successful test, IBP suggests up to three models: free ones on OpenRouter
+  (tool-capable and larger context first), any model on local servers. Paid models are never
+  added automatically.

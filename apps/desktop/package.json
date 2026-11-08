@@ -17,6 +17,7 @@
     "@electron-forge/cli": "8.0.1",
     "@electron-forge/maker-zip": "8.0.1",
     "@ibp/core": "workspace:*",
+    "@ibp/model-router": "workspace:*",
     "@ibp/shared": "workspace:*",
     "@playwright/test": "1.64.1",
     "electron": "45.0.0",

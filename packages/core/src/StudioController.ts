@@ -1,10 +1,14 @@
+import { randomUUID } from "node:crypto";
 import {
   translate,
   webviewMessageSchema,
+  type ChatMessageView,
   type MessageKey,
+  type ModelRef,
   type ProjectSummary,
   type WebviewRequest,
 } from "@ibp/shared";
+import { AiService, toAiError } from "./ai/AiService";
 import { DevServerManager } from "./devServer";
 import { IbpError, toAppError } from "./errors";
 import type { HostPlatform } from "./HostPlatform";
@@ -18,7 +22,10 @@ export interface StudioControllerOptions {
   env: () => Promise<NodeJS.ProcessEnv>;
   /** Overrides for tests. */
   preview?: { readyTimeoutMs?: number; pollIntervalMs?: number; npm?: string };
+  fetch?: typeof fetch;
 }
+
+const CHAT_HISTORY = 200;
 
 function requestIdOf(raw: unknown): string | undefined {
   if (typeof raw !== "object" || raw === null || !("requestId" in raw)) return undefined;
@@ -39,10 +46,23 @@ export class StudioController {
   private projects: ProjectSummary[] = [];
   private lastPreviewStatus: string = "stopped";
   private readyListeners: (() => void)[] = [];
+  private readonly ai: AiService;
+  private readonly aiReady: Promise<void>;
+  private chat: ChatMessageView[] = [];
+  private chatAbort: AbortController | undefined;
 
   constructor(options: StudioControllerOptions) {
     this.host = options.host;
     this.service = options.service;
+    this.ai = new AiService({
+      dataDir: options.host.dataDir,
+      secrets: options.host.secrets,
+      log: (m) => options.host.log("warn", m),
+      ...(options.fetch ? { fetch: options.fetch } : {}),
+    });
+    this.aiReady = this.ai.load().catch((error: unknown) => {
+      options.host.log("error", `AI settings: ${String(error)}`);
+    });
     this.preview = new DevServerManager({
       runner: options.runner,
       env: options.env,
@@ -63,6 +83,7 @@ export class StudioController {
   }
 
   async dispose(): Promise<void> {
+    this.chatAbort?.abort();
     await this.preview.stop();
   }
 
@@ -85,6 +106,8 @@ export class StudioController {
     if (message.type === "ready") {
       for (const resolve of this.readyListeners.splice(0)) resolve();
       await this.pushState(true);
+      await this.pushAi();
+      this.pushChat();
       return;
     }
     try {
@@ -106,7 +129,21 @@ export class StudioController {
         error: appError,
       });
     }
-    await this.pushState(!message.type.startsWith("preview/"));
+    if (message.type.startsWith("ai/")) await this.pushAi();
+    else if (message.type.startsWith("chat/")) this.pushChat();
+    else await this.pushState(!message.type.startsWith("preview/"));
+  }
+
+  async pushAi(): Promise<void> {
+    await this.aiReady;
+    this.host.post({ type: "ai/state", ai: await this.ai.view() });
+  }
+
+  private pushChat(): void {
+    this.host.post({
+      type: "chat/state",
+      chat: { messages: this.chat, streaming: this.chatAbort !== undefined },
+    });
   }
 
   /** Sends the full state; `refresh` re-reads projects from disk (skipped for preview updates). */
@@ -235,6 +272,130 @@ export class StudioController {
         if (url && status === "running") await host.openExternal(url);
         return undefined;
       }
+
+      default:
+        await this.aiReady;
+        return this.handleAi(message);
+    }
+  }
+
+  private async handleAi(message: WebviewRequest): Promise<undefined> {
+    const { ai } = this;
+    switch (message.type) {
+      case "ai/provider/add":
+        await ai.addProvider(message.preset);
+        break;
+      case "ai/provider/update":
+        await ai.updateProvider(message.providerId, {
+          ...(message.name !== undefined ? { name: message.name } : {}),
+          ...(message.baseUrl !== undefined ? { baseUrl: message.baseUrl } : {}),
+          ...(message.enabled !== undefined ? { enabled: message.enabled } : {}),
+        });
+        break;
+      case "ai/provider/remove": {
+        const provider = (await ai.view()).providers.find((p) => p.id === message.providerId);
+        const approved = await this.host.confirm(
+          this.t("ai.provider.removeConfirm", { name: provider?.name ?? "" }),
+          this.t("ai.provider.remove"),
+        );
+        if (!approved) throw new IbpError("cancelled");
+        await ai.removeProvider(message.providerId);
+        break;
+      }
+      case "ai/provider/setKey":
+        await ai.setKey(message.providerId, message.key);
+        break;
+      case "ai/provider/clearKey":
+        await ai.clearKey(message.providerId);
+        break;
+      case "ai/provider/test":
+        await ai.test(message.providerId);
+        break;
+      case "ai/model/probe":
+        await ai.probe(message.providerId, message.modelId);
+        break;
+      case "ai/preferences/set":
+        await ai.setPreferences(message.order);
+        break;
+      case "chat/send":
+        await this.startChat(message.text, message.model, message.projectId);
+        break;
+      case "chat/stop":
+        this.chatAbort?.abort();
+        break;
+      case "chat/clear":
+        this.chatAbort?.abort();
+        this.chat = [];
+        break;
+    }
+    return undefined;
+  }
+
+  private async startChat(text: string, model: "auto" | ModelRef, projectId: string | null) {
+    if (this.chatAbort) throw new IbpError("ai_busy");
+    const project = projectId
+      ? await this.service.get(projectId).catch(() => undefined)
+      : undefined;
+    const at = new Date().toISOString();
+    const user: ChatMessageView = {
+      id: randomUUID(),
+      role: "user",
+      content: text,
+      model: null,
+      at,
+    };
+    const answer: ChatMessageView = {
+      id: randomUUID(),
+      role: "assistant",
+      content: "",
+      model: null,
+      at,
+    };
+    // Earlier failed answers are not sent back to the model.
+    const history = this.chat
+      .filter((m) => !m.error && m.content)
+      .map((m) => ({ role: m.role, content: m.content }));
+    this.chat = [...this.chat, user, answer].slice(-CHAT_HISTORY);
+    this.chatAbort = new AbortController();
+    this.pushChat();
+
+    const system = this.t("chat.system", {
+      project: project
+        ? this.t("chat.systemProject", { name: project.name, stack: project.stack })
+        : "",
+    });
+    void this.runChat(
+      answer,
+      [{ role: "system", content: system }, ...history, { role: "user", content: text }],
+      model,
+      this.chatAbort.signal,
+    );
+  }
+
+  private async runChat(
+    answer: ChatMessageView,
+    messages: { role: "system" | "user" | "assistant"; content: string }[],
+    model: "auto" | ModelRef,
+    signal: AbortSignal,
+  ): Promise<void> {
+    try {
+      for await (const chunk of this.ai.chat("chat", messages, model, signal)) {
+        if (chunk.type === "route") {
+          answer.model = { providerId: chunk.providerId, modelId: chunk.modelId };
+          answer.content = "";
+          this.pushChat();
+        } else if (chunk.type === "text") {
+          answer.content += chunk.text;
+          this.host.post({ type: "chat/delta", messageId: answer.id, text: chunk.text });
+        }
+      }
+    } catch (raw) {
+      const error = toAppError(toAiError(raw));
+      if (error.code !== "cancelled") answer.error = error;
+    } finally {
+      this.chatAbort = undefined;
+      this.pushChat();
+      await this.pushAi(); // usage and cooldowns changed
     }
   }
 }

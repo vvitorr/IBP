@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "pnpm --filter @ibp/webview build && pnpm --filter ibp build && pnpm --filter ibp-desktop build",
-    "typecheck": "tsc -p packages/shared && tsc -p packages/core && tsc -p apps/extension && tsc -p apps/extension/test && tsc -p apps/webview && tsc -p apps/desktop",
+    "typecheck": "tsc -p packages/shared && tsc -p packages/model-router && tsc -p packages/core && tsc -p apps/extension && tsc -p apps/extension/test && tsc -p apps/webview && tsc -p apps/desktop",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

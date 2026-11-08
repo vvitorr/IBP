@@ -2,18 +2,22 @@ import { useEffect, useState } from "react";
 import { Group, Panel, Separator, useDefaultLayout } from "react-resizable-panels";
 import {
   DEFAULT_LOCALE,
+  type AiState,
   type AppError,
+  type ChatState,
   type PreviewState,
   type Settings,
   type StateMessage,
   translate,
 } from "@ibp/shared";
 import { CreateProject } from "./components/CreateProject";
+import { ChatPanel } from "./components/ChatPanel";
 import { ErrorNotice } from "./components/ErrorNotice";
 import { PreviewPane } from "./components/PreviewPane";
 import { ProjectList } from "./components/ProjectList";
 import { ProjectOverview } from "./components/ProjectOverview";
 import { PropertiesPanel } from "./components/PropertiesPanel";
+import { SettingsView } from "./components/SettingsView";
 import { TopBar } from "./components/TopBar";
 import { layoutStorage, onHostMessage, request, sendReady, type RequestInput } from "./host";
 import { LocaleContext } from "./i18n";
@@ -56,6 +60,10 @@ export function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [tab, setTab] = useState<"preview" | "project">("preview");
+  const [leftTab, setLeftTab] = useState<"projects" | "chat">("projects");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [ai, setAi] = useState<AiState | null>(null);
+  const [chat, setChat] = useState<ChatState>({ messages: [], streaming: false });
   const [error, setError] = useState<AppError | null>(null);
   const [busy, setBusy] = useState(false);
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
@@ -69,8 +77,24 @@ export function App() {
 
   useEffect(() => {
     const off = onHostMessage((message) => {
-      if (message.type === "state") setState(message);
-      else setCreating(true); // "navigate" to the create form
+      switch (message.type) {
+        case "state":
+          return setState(message);
+        case "ai/state":
+          return setAi(message.ai);
+        case "chat/state":
+          return setChat(message.chat);
+        case "chat/delta":
+          return setChat((current) => ({
+            ...current,
+            messages: current.messages.map((m) =>
+              m.id === message.messageId ? { ...m, content: m.content + message.text } : m,
+            ),
+          }));
+        case "navigate":
+          setSettingsOpen(false);
+          return setCreating(true);
+      }
     });
     sendReady();
     return off;
@@ -113,6 +137,8 @@ export function App() {
           settings={settings}
           projectName={projects?.find((p) => p.id === currentProjectId)?.name ?? null}
           onChange={(update) => void run({ type: "settings/update", update })}
+          settingsOpen={settingsOpen}
+          onToggleSettings={() => setSettingsOpen((open) => !open)}
         />
         {error && <ErrorNotice error={error} onDismiss={() => setError(null)} />}
         <Group
@@ -122,24 +148,70 @@ export function App() {
           onLayoutChanged={onLayoutChanged}
         >
           <Panel id="projects" defaultSize="22" minSize="14" maxSize="40">
-            <ProjectList
-              projects={projects}
-              currentProjectId={currentProjectId}
-              selectedId={selected?.id ?? null}
-              onSelect={(id) => {
-                setSelectedId(id);
-                setCreating(false);
-              }}
-              onCreate={() => setCreating(true)}
-              onImport={() =>
-                void run({ type: "projects/import" }).then((ok) => ok && setCreating(false))
-              }
-            />
+            <div className="flex h-full flex-col bg-surface">
+              <div
+                role="tablist"
+                className="flex h-9 shrink-0 items-end gap-1 border-b border-line px-2"
+              >
+                {(["projects", "chat"] as const).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    role="tab"
+                    aria-selected={leftTab === key}
+                    onClick={() => setLeftTab(key)}
+                    className={`-mb-px border-b-2 px-3 py-1.5 text-[12px] ${
+                      leftTab === key
+                        ? "border-accent text-text"
+                        : "border-transparent text-muted hover:text-text"
+                    }`}
+                  >
+                    {key === "projects" ? t("projects.title") : t("chat.tab")}
+                  </button>
+                ))}
+              </div>
+              <div role="tabpanel" className="min-h-0 flex-1">
+                {leftTab === "chat" ? (
+                  <ChatPanel
+                    chat={chat}
+                    ai={ai}
+                    mode={settings.mode}
+                    onSend={(text, model) =>
+                      run({ type: "chat/send", text, model, projectId: selected?.id ?? null })
+                    }
+                    onStop={() => void run({ type: "chat/stop" })}
+                    onClear={() => void run({ type: "chat/clear" })}
+                    onOpenSettings={() => setSettingsOpen(true)}
+                  />
+                ) : (
+                  <ProjectList
+                    projects={projects}
+                    currentProjectId={currentProjectId}
+                    selectedId={selected?.id ?? null}
+                    onSelect={(id) => {
+                      setSelectedId(id);
+                      setCreating(false);
+                    }}
+                    onCreate={() => setCreating(true)}
+                    onImport={() =>
+                      void run({ type: "projects/import" }).then((ok) => ok && setCreating(false))
+                    }
+                  />
+                )}
+              </div>
+            </div>
           </Panel>
           <Separator className={separatorClass} />
           <Panel id="workspace" minSize="30">
             <main className="h-full overflow-hidden">
-              {showCreate ? (
+              {settingsOpen ? (
+                <SettingsView
+                  ai={ai}
+                  mode={settings.mode}
+                  run={run}
+                  onClose={() => setSettingsOpen(false)}
+                />
+              ) : showCreate ? (
                 <div className="h-full overflow-y-auto">
                   <CreateProject
                     busy={busy}

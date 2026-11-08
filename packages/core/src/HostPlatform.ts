@@ -6,6 +6,7 @@ import type {
   Settings,
   SettingUpdate,
 } from "@ibp/shared";
+import type { SecretVault } from "./ai/AiService";
 
 /**
  * What a host (VS Code extension or desktop app) must provide to run the Studio.
@@ -15,6 +16,10 @@ import type {
 export interface HostPlatform {
   readonly kind: HostKind;
   readonly capabilities: Capabilities;
+  /** Folder for IBP's own data files (AI settings, usage). Never inside a user project. */
+  readonly dataDir: string;
+  /** API keys: OS keychain-backed storage, never a plain file. */
+  readonly secrets: SecretVault;
 
   /** Sends a message to the Studio UI. */
   post(message: HostMessage): void;

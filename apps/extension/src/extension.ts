@@ -4,6 +4,7 @@ import { translate } from "@ibp/shared";
 import { readSettings } from "./config";
 import { exists, JsonProjectStore, metadataPath, ProjectService, runGit } from "@ibp/core";
 import { StudioPanel, type StudioDeps } from "./studio/StudioPanel";
+import { vscodeSecretVault } from "./vscodeHost";
 
 /** Exported for integration tests only. */
 export interface IbpApi {
@@ -24,6 +25,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<IbpApi
     service,
     webviewRoot: vscode.Uri.joinPath(context.extensionUri, "dist", "webview"),
     log,
+    dataDir: context.globalStorageUri.fsPath,
+    secrets: vscodeSecretVault(context.secrets),
   };
 
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);

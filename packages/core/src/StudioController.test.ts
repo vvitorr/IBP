@@ -22,9 +22,17 @@ let controller: StudioController;
 
 function fakeHost(): HostPlatform {
   const settings: Settings = { language: "en", mode: "beginner", theme: "dark" };
+  const vault = new Map<string, string>();
   return {
     kind: "desktop",
     capabilities: { terminal: false },
+    dataDir: join(root, "data"),
+    secrets: {
+      get: async (k) => vault.get(k),
+      set: async (k, v) => void vault.set(k, v),
+      delete: async (k) => void vault.delete(k),
+      status: async () => "os",
+    },
     post: (message) => void posted.push(message),
     log: () => {},
     readSettings: () => settings,

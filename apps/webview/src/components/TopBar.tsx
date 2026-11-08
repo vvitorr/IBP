@@ -1,3 +1,4 @@
+import { Settings as SettingsIcon } from "lucide-react";
 import { LOCALES, MODES, THEMES, type Settings, type SettingUpdate } from "@ibp/shared";
 import { useT } from "../i18n";
 
@@ -5,10 +6,14 @@ export function TopBar({
   settings,
   projectName,
   onChange,
+  settingsOpen,
+  onToggleSettings,
 }: {
   settings: Settings;
   projectName: string | null;
   onChange: (update: SettingUpdate) => void;
+  settingsOpen: boolean;
+  onToggleSettings: () => void;
 }) {
   const t = useT();
   return (
@@ -80,6 +85,16 @@ export function TopBar({
           ))}
         </select>
       </label>
+      <button
+        type="button"
+        aria-label={t("topbar.settings")}
+        title={t("topbar.settings")}
+        aria-pressed={settingsOpen}
+        onClick={onToggleSettings}
+        className={`rounded p-1.5 hover:bg-raised hover:text-text ${settingsOpen ? "bg-raised text-text" : "text-muted"}`}
+      >
+        <SettingsIcon size={15} aria-hidden />
+      </button>
     </header>
   );
 }

@@ -1,0 +1,14 @@
+{
+  "name": "@ibp/model-router",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Provider-independent model layer: OpenAI-compatible client, presets, capability probes, routing with fallback. Pure logic: no file system, no vscode/electron.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing/fakeOpenAIServer.ts"
+  },
+  "dependencies": {
+    "@ibp/shared": "workspace:*"
+  }
+}

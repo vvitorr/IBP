@@ -1,6 +1,6 @@
 import { dialog, shell, type BrowserWindow } from "electron";
 import { previewUrlSchema, translate, type MessageKey } from "@ibp/shared";
-import type { HostPlatform } from "@ibp/core";
+import type { HostPlatform, SecretVault } from "@ibp/core";
 import type { SettingsStore } from "./settings";
 
 /**
@@ -10,12 +10,18 @@ import type { SettingsStore } from "./settings";
 const testMode = process.env.IBP_TEST_MODE === "1";
 
 /** HostPlatform backed by Electron: native dialogs, a JSON settings file, the system browser. */
-export function createDesktopHost(win: BrowserWindow, settings: SettingsStore): HostPlatform {
+export function createDesktopHost(
+  win: BrowserWindow,
+  settings: SettingsStore,
+  storage: { dataDir: string; secrets: SecretVault },
+): HostPlatform {
   const t = (key: MessageKey) => translate(settings.get().language, key);
 
   return {
     kind: "desktop",
     capabilities: { terminal: false }, // built-in terminal arrives with Milestone B
+    dataDir: storage.dataDir,
+    secrets: storage.secrets,
     post: (message) => {
       if (!win.isDestroyed()) win.webContents.send("ibp:message", message);
     },

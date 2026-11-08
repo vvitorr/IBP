@@ -1,3 +1,4 @@
+export * from "./ai/AiService";
 export * from "./devServer";
 export * from "./errors";
 export * from "./fsutil";
