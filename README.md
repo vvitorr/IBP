@@ -1,8 +1,8 @@
 # IBP — Intent Based Programming
 
-An AI-assisted environment for building, editing and maintaining professional React websites.
-People without programming experience describe what they want; developers keep full access to
-the same real source code and Git history.
+An AI-assisted environment for building, editing and maintaining professional websites with
+React and Next.js. People without programming experience describe what they want; developers
+keep full access to the same real source code and Git history.
 
 IBP runs as a **desktop app** (Electron) and as a **VS Code extension** (VS Code, Cursor,
 VSCodium). Both share one core and offer the same features. Generated sites use **Vite + React**
