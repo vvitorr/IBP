@@ -2,7 +2,7 @@ import { realpath } from "node:fs/promises";
 import { join } from "node:path";
 import * as vscode from "vscode";
 import { translate, type ProjectSummary } from "@ibp/shared";
-import { exists, type HostPlatform } from "@ibp/core";
+import { exists, type HostPlatform, type SecretVault } from "@ibp/core";
 import { projectsRoot, readSettings, updateSetting } from "./config";
 
 async function isCurrentWorkspace(path: string): Promise<boolean> {
@@ -12,9 +12,20 @@ async function isCurrentWorkspace(path: string): Promise<boolean> {
 }
 
 /** HostPlatform backed by VS Code: native dialogs, settings, workspace and terminals. */
+/** VS Code SecretStorage (backed by the OS keychain through VS Code). */
+export function vscodeSecretVault(secrets: vscode.SecretStorage): SecretVault {
+  return {
+    get: async (key) => secrets.get(key),
+    set: async (key, value) => secrets.store(key, value),
+    delete: async (key) => secrets.delete(key),
+    status: async () => "os",
+  };
+}
+
 export function createVsCodeHost(
   panel: vscode.WebviewPanel,
   log: vscode.LogOutputChannel,
+  storage: { dataDir: string; secrets: SecretVault },
 ): HostPlatform {
   const t = (key: Parameters<typeof translate>[1], params?: Record<string, string>) =>
     translate(readSettings().language, key, params);
@@ -30,6 +41,8 @@ export function createVsCodeHost(
   return {
     kind: "vscode",
     capabilities: { terminal: true },
+    dataDir: storage.dataDir,
+    secrets: storage.secrets,
     post: (message) => void panel.webview.postMessage(message),
     log: (level, message) => log[level](message),
     readSettings,

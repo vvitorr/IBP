@@ -62,11 +62,22 @@ version), git status/diff/commit/revert panel. Until then "View code" opens the 
 The preview now runs; still to prove: inject `data-ibp-src` at compile time (Vite plugin and a
 Turbopack loader for Next.js) and report the clicked element's file and line to the Studio.
 
-## Phase 2 — AI infrastructure — Planned
+## Phase 2 — AI infrastructure — Tested
 
-Provider abstraction, OpenAI-compatible adapter, model configuration UI, `SecretStorage`
-credentials, capability probes, ModelRouter, streaming, retries and fallback, health checks,
-usage tracking, understandable provider errors.
+Decided in ADR-019 to ADR-021. Package `packages/model-router` + `packages/core/src/ai`.
+
+| Item                                                                                               | Status       | Evidence                                                                                   |
+| -------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------ |
+| `ModelProvider` interface + OpenAI-compatible client (fetch + SSE)                                 | Tested       | Unit tests against a fake server: models, streaming, usage, abort, 401/429/500 mapping     |
+| Presets: OpenRouter, Ollama, LM Studio, FreeLLMAPI, custom; https-or-loopback URL rule             | Tested       | Unit tests                                                                                 |
+| Model capability metadata + on-demand probes (streaming, tools)                                    | Tested       | Unit and controller tests                                                                  |
+| Router: preference order, task requirements, cooldowns, fallback before first token only           | Tested       | Unit tests                                                                                 |
+| Secure key storage (desktop safeStorage, VS Code SecretStorage), keys never in UI/logs/files       | Tested       | Controller test scans messages, logs and files; desktop e2e scans every file in `userData` |
+| Settings → AI models UI (add, URL, key, test, models, order, usage)                                | Tested       | Desktop e2e                                                                                |
+| Streaming chat in the Assistant tab (stop, clear, friendly errors, model picker in developer mode) | Tested       | Controller tests; desktop e2e                                                              |
+| Usage tracking per provider/model (today)                                                          | Tested       | Controller test                                                                            |
+| Real providers (OpenRouter, Ollama, LM Studio, FreeLLMAPI)                                         | Not verified | No key or local server on the dev machine; needs a manual check with a real key            |
+| VS Code: AI settings and chat                                                                      | Implemented  | Same shared code; not covered by an automated VS Code test                                 |
 
 ## Phase 3 — Coding agent — Planned
 

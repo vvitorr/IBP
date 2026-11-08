@@ -71,6 +71,22 @@ Facts used (accessed 2026-11-07):
   <https://github.com/microsoft/node-pty>
 - Next dev writes an `AGENTS.md` into generated projects on first run (seen in a real run).
 
+## 2c. Phase 2 facts (accessed 2026-11-08)
+
+- OpenRouter: base URL `https://openrouter.ai/api/v1` (OpenAPI `servers`); `/models` fields include
+  `context_length`, `supported_parameters`, `pricing` (`prompt`/`completion` strings); filter
+  `?supported_parameters=tools`. **Unverified:** that `"tools"` appears literally in
+  `supported_parameters`, and the `:free` suffix rule (both handled as hints, not assumptions).
+- Ollama `/v1/chat/completions`: `stream_options.include_usage` supported, `tools` yes,
+  `tool_choice` no.
+- Electron `safeStorage` async API: `isAsyncEncryptionAvailable(): Promise<boolean>`,
+  `encryptStringAsync(string): Promise<Buffer>`,
+  `decryptStringAsync(Buffer): Promise<{ result, shouldReEncrypt }>`; Linux
+  `getSelectedStorageBackend()` returns `basic_text` when unprotected.
+- VS Code `SecretStorage`: `get`, `store`, `delete`, `keys`, `onDidChange` (checked in
+  `@types/vscode` 1.125).
+- No new npm dependencies: the model layer uses Node's built-in `fetch`.
+
 ## 3. FreeLLMAPI
 
 - Repository: <https://github.com/tashfeenahmed/freellmapi> (the original; forks with the same

@@ -52,8 +52,166 @@ export const settingUpdateSchema = z.discriminatedUnion("key", [
 ]);
 export type SettingUpdate = z.infer<typeof settingUpdateSchema>;
 
+export const ERROR_CODES = [
+  "cancelled",
+  "invalid_message",
+  "project_not_found",
+  "folder_exists",
+  "invalid_name",
+  "not_react_project",
+  "already_registered",
+  "folder_missing",
+  "invalid_metadata",
+  "io_error",
+  "deps_missing",
+  "install_failed",
+  "preview_failed",
+  "preview_unsupported",
+  "command_not_found",
+  "ai_no_model",
+  "ai_auth",
+  "ai_rate_limited",
+  "ai_unavailable",
+  "ai_bad_request",
+  "ai_all_failed",
+  "ai_interrupted",
+  "ai_invalid_url",
+  "ai_busy",
+  "secret_storage_unavailable",
+  "unknown",
+] as const;
+export type ErrorCode = (typeof ERROR_CODES)[number];
+
+/** Friendly message per error code; `detail` carries the technical explanation. */
+export const ERROR_MESSAGE_KEYS: Record<ErrorCode, MessageKey> = {
+  cancelled: "error.cancelled",
+  invalid_message: "error.invalidMessage",
+  project_not_found: "error.projectNotFound",
+  folder_exists: "error.folderExists",
+  invalid_name: "error.invalidName",
+  not_react_project: "error.notReactProject",
+  already_registered: "error.alreadyRegistered",
+  folder_missing: "error.folderMissing",
+  invalid_metadata: "error.invalidMetadata",
+  io_error: "error.io",
+  deps_missing: "error.depsMissing",
+  install_failed: "error.installFailed",
+  preview_failed: "error.previewFailed",
+  preview_unsupported: "error.previewUnsupported",
+  command_not_found: "error.commandNotFound",
+  ai_no_model: "error.aiNoModel",
+  ai_auth: "error.aiAuth",
+  ai_rate_limited: "error.aiRateLimited",
+  ai_unavailable: "error.aiUnavailable",
+  ai_bad_request: "error.aiBadRequest",
+  ai_all_failed: "error.aiAllFailed",
+  ai_interrupted: "error.aiInterrupted",
+  ai_invalid_url: "error.aiInvalidUrl",
+  ai_busy: "error.aiBusy",
+  secret_storage_unavailable: "error.secretStorageUnavailable",
+  unknown: "error.unknown",
+};
+
+export const appErrorSchema = z.strictObject({
+  code: z.enum(ERROR_CODES),
+  detail: z.string().max(4000).optional(),
+});
+export type AppError = z.infer<typeof appErrorSchema>;
+
+// --- AI settings and chat. API keys never appear in these schemas: only `hasKey`. ---
+
+export const PROVIDER_PRESETS = [
+  "openrouter",
+  "ollama",
+  "lmstudio",
+  "freellmapi",
+  "custom",
+] as const;
+export type ProviderPreset = (typeof PROVIDER_PRESETS)[number];
+
+export const TRISTATES = ["yes", "no", "unknown"] as const;
+export const SECURE_STORAGE = ["os", "weak", "unavailable"] as const;
+export type SecureStorageStatus = (typeof SECURE_STORAGE)[number];
+
+export const providerIdSchema = z.string().regex(/^p-[a-f0-9]{12}$/);
+export const modelIdSchema = z.string().min(1).max(200);
+export const modelRefSchema = z.strictObject({
+  providerId: providerIdSchema,
+  modelId: modelIdSchema,
+});
+export type ModelRef = z.infer<typeof modelRefSchema>;
+
+export const modelViewSchema = z.strictObject({
+  id: modelIdSchema,
+  contextWindow: z.number().int().positive().nullable(),
+  tools: z.enum(TRISTATES),
+  streaming: z.enum(TRISTATES),
+  free: z.boolean().nullable(),
+  probedAt: z.string().nullable(),
+});
+export type ModelView = z.infer<typeof modelViewSchema>;
+
+export const providerViewSchema = z.strictObject({
+  id: providerIdSchema,
+  preset: z.enum(PROVIDER_PRESETS),
+  name: z.string().max(80),
+  baseUrl: z.string().max(500),
+  enabled: z.boolean(),
+  keyRequired: z.boolean(),
+  hasKey: z.boolean(),
+  health: z.strictObject({
+    status: z.enum(["unknown", "ok", "error"]),
+    checkedAt: z.string().nullable(),
+    latencyMs: z.number().nullable(),
+    error: appErrorSchema.optional(),
+  }),
+  cooldownUntil: z.string().nullable(),
+  models: z.array(modelViewSchema).max(5000),
+});
+export type ProviderView = z.infer<typeof providerViewSchema>;
+
+export const usageRowSchema = z.strictObject({
+  providerId: z.string().max(40),
+  modelId: modelIdSchema,
+  requests: z.number().int().nonnegative(),
+  errors: z.number().int().nonnegative(),
+  promptTokens: z.number().int().nonnegative(),
+  completionTokens: z.number().int().nonnegative(),
+});
+export type UsageRow = z.infer<typeof usageRowSchema>;
+
+export const aiStateSchema = z.strictObject({
+  providers: z.array(providerViewSchema).max(50),
+  preferences: z.array(modelRefSchema).max(50),
+  secureStorage: z.enum(SECURE_STORAGE),
+  usageToday: z.array(usageRowSchema).max(500),
+});
+export type AiState = z.infer<typeof aiStateSchema>;
+
+export const chatMessageSchema = z.strictObject({
+  id: z.string().min(1).max(64),
+  role: z.enum(["user", "assistant"]),
+  content: z.string().max(200_000),
+  model: modelRefSchema.nullable(),
+  at: z.string(),
+  error: appErrorSchema.optional(),
+});
+export type ChatMessageView = z.infer<typeof chatMessageSchema>;
+
+export const chatStateSchema = z.strictObject({
+  messages: z.array(chatMessageSchema).max(500),
+  streaming: z.boolean(),
+});
+export type ChatState = z.infer<typeof chatStateSchema>;
+
 const withId = <T extends string>(type: T) =>
   z.strictObject({ type: z.literal(type), requestId: requestIdSchema, id: projectIdSchema });
+const withProvider = <T extends string>(type: T) =>
+  z.strictObject({
+    type: z.literal(type),
+    requestId: requestIdSchema,
+    providerId: providerIdSchema,
+  });
 
 export const webviewMessageSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("ready") }),
@@ -91,55 +249,55 @@ export const webviewMessageSchema = z.discriminatedUnion("type", [
   z.strictObject({ type: z.literal("preview/restart"), requestId: requestIdSchema }),
   // Opens the running preview's own URL; the webview never supplies a URL.
   z.strictObject({ type: z.literal("preview/openExternal"), requestId: requestIdSchema }),
+
+  // AI providers. The key travels once, from the Studio to the host's secret storage.
+  z.strictObject({
+    type: z.literal("ai/provider/add"),
+    requestId: requestIdSchema,
+    preset: z.enum(PROVIDER_PRESETS),
+  }),
+  z.strictObject({
+    type: z.literal("ai/provider/update"),
+    requestId: requestIdSchema,
+    providerId: providerIdSchema,
+    name: z.string().trim().min(1).max(80).optional(),
+    baseUrl: z.string().trim().max(500).optional(),
+    enabled: z.boolean().optional(),
+  }),
+  withProvider("ai/provider/remove"),
+  z.strictObject({
+    type: z.literal("ai/provider/setKey"),
+    requestId: requestIdSchema,
+    providerId: providerIdSchema,
+    key: z.string().trim().min(1).max(1000),
+  }),
+  withProvider("ai/provider/clearKey"),
+  withProvider("ai/provider/test"),
+  z.strictObject({
+    type: z.literal("ai/model/probe"),
+    requestId: requestIdSchema,
+    providerId: providerIdSchema,
+    modelId: modelIdSchema,
+  }),
+  z.strictObject({
+    type: z.literal("ai/preferences/set"),
+    requestId: requestIdSchema,
+    order: z.array(modelRefSchema).max(50),
+  }),
+
+  // Chat
+  z.strictObject({
+    type: z.literal("chat/send"),
+    requestId: requestIdSchema,
+    text: z.string().trim().min(1).max(20_000),
+    model: z.union([z.literal("auto"), modelRefSchema]),
+    projectId: projectIdSchema.nullable(),
+  }),
+  z.strictObject({ type: z.literal("chat/stop"), requestId: requestIdSchema }),
+  z.strictObject({ type: z.literal("chat/clear"), requestId: requestIdSchema }),
 ]);
 export type WebviewMessage = z.infer<typeof webviewMessageSchema>;
 export type WebviewRequest = Exclude<WebviewMessage, { type: "ready" }>;
-
-export const ERROR_CODES = [
-  "cancelled",
-  "invalid_message",
-  "project_not_found",
-  "folder_exists",
-  "invalid_name",
-  "not_react_project",
-  "already_registered",
-  "folder_missing",
-  "invalid_metadata",
-  "io_error",
-  "deps_missing",
-  "install_failed",
-  "preview_failed",
-  "preview_unsupported",
-  "command_not_found",
-  "unknown",
-] as const;
-export type ErrorCode = (typeof ERROR_CODES)[number];
-
-/** Friendly message per error code; `detail` carries the technical explanation. */
-export const ERROR_MESSAGE_KEYS: Record<ErrorCode, MessageKey> = {
-  cancelled: "error.cancelled",
-  invalid_message: "error.invalidMessage",
-  project_not_found: "error.projectNotFound",
-  folder_exists: "error.folderExists",
-  invalid_name: "error.invalidName",
-  not_react_project: "error.notReactProject",
-  already_registered: "error.alreadyRegistered",
-  folder_missing: "error.folderMissing",
-  invalid_metadata: "error.invalidMetadata",
-  io_error: "error.io",
-  deps_missing: "error.depsMissing",
-  install_failed: "error.installFailed",
-  preview_failed: "error.previewFailed",
-  preview_unsupported: "error.previewUnsupported",
-  command_not_found: "error.commandNotFound",
-  unknown: "error.unknown",
-};
-
-export const appErrorSchema = z.strictObject({
-  code: z.enum(ERROR_CODES),
-  detail: z.string().max(4000).optional(),
-});
-export type AppError = z.infer<typeof appErrorSchema>;
 
 export const projectSummarySchema = z.strictObject({
   ...projectDetailsSchema.shape,
@@ -203,6 +361,14 @@ export const hostMessageSchema = z.union([
     preview: previewStateSchema,
   }),
   z.strictObject({ type: z.literal("navigate"), view: z.enum(["create"]) }),
+  z.strictObject({ type: z.literal("ai/state"), ai: aiStateSchema }),
+  z.strictObject({ type: z.literal("chat/state"), chat: chatStateSchema }),
+  // Streamed tokens of one assistant message, appended by the Studio.
+  z.strictObject({
+    type: z.literal("chat/delta"),
+    messageId: z.string().min(1).max(64),
+    text: z.string().max(20_000),
+  }),
   responseSchema,
 ]);
 export type HostMessage = z.infer<typeof hostMessageSchema>;

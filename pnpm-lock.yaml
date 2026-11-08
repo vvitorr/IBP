@@ -205,6 +205,9 @@ importers:
       '@ibp/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@ibp/model-router':
+        specifier: workspace:*
+        version: link:../../packages/model-router
       '@ibp/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -287,12 +290,21 @@ importers:
 
   packages/core:
     dependencies:
+      '@ibp/model-router':
+        specifier: workspace:*
+        version: link:../model-router
       '@ibp/shared':
         specifier: workspace:*
         version: link:../shared
       zod:
         specifier: 4.6.7
         version: 4.6.7
+
+  packages/model-router:
+    dependencies:
+      '@ibp/shared':
+        specifier: workspace:*
+        version: link:../shared
 
   packages/shared:
     dependencies:

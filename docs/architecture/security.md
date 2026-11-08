@@ -31,7 +31,15 @@
   as a fixed string in a visible terminal whose `cwd` comes from the registry.
 - **Untrusted files:** `.ibp/project.json` and the registry are schema-validated when read; a
   damaged registry is moved aside instead of overwritten.
-- **Secrets:** none stored yet. Settings and metadata contain no credentials.
+- **API keys (Phase 2):** stored only through the host's secret storage — desktop: Electron
+  `safeStorage` async API, ciphertext in `userData/secrets.json`, decryption key in the OS
+  keychain; VS Code: `SecretStorage`. The key travels once from the Studio to the host
+  (`ai/provider/setKey`) and is never sent back (the UI gets `hasKey`), never logged, and
+  redacted from provider error messages. It is sent only as `Authorization: Bearer` to the
+  provider's own base URL, which must be `https://` (or `http://` on loopback). Tests assert the
+  key appears in no posted message, log or file in plain text (unit and desktop e2e).
+- **Model traffic:** only the host calls providers; the Studio keeps `connect-src 'none'`.
+  Usage logs hold counts and token numbers, never prompts or answers.
 - **Desktop app (Electron):** Studio served from `ibp://studio` (custom secure scheme, file
   lookups confined to the bundled renderer folder), `contextIsolation`, `sandbox`, no
   `nodeIntegration`; preload exposes only `postMessage`/`onMessage`; the main process accepts IPC
@@ -55,8 +63,8 @@ connect-src 'none'`. Single-instance lock so two windows never write the same re
 
 ## Planned controls
 
-- Phase 2: API keys only in `SecretStorage` (VS Code) / Electron `safeStorage` async API (desktop;
-  on Linux without a keyring it falls back to a hard-coded key, so warn the user); never logged, never sent to the webview (the UI sees
+- Phase 2 (done): see "API keys" above. Linux without a keyring falls back to a hard-coded key;
+  the UI warns. Remaining: never logged, never sent to the webview (the UI sees
   "configured: yes/no"); redact keys from error details.
 - Phase 3: tool registry with risk levels. Approval required for: deleting files, installing
   packages, editing config/deploy/env files, running shell commands, network access. File tools
@@ -74,6 +82,9 @@ connect-src 'none'`. Single-instance lock so two windows never write the same re
   (needs an Apple Developer ID).
 - **`npm install` runs lifecycle scripts** of the generated project's dependencies.
 - **The dev server listens on localhost**, reachable by other local processes.
+- **Windows DPAPI** protects keys from other users, not from other apps running as the same user.
+- **Prompts go to the chosen provider.** Chat text (and later project code) leaves the machine
+  unless a local provider (Ollama, LM Studio) is used.
 - **Free model providers may log prompts** (FreeLLMAPI notes this for FreeInference). Users must
   not send client secrets or personal data through them.
 - **Prompt injection:** project files or web content can contain instructions aimed at the agent.

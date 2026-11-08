@@ -1,7 +1,8 @@
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { _electron as electron, expect, test, type ElectronApplication } from "@playwright/test";
+import { REPLY, startFakeOpenAIServer } from "@ibp/model-router/testing";
 
 const main = join(__dirname, "..", "dist", "main.js");
 // Set IBP_APP_EXECUTABLE to test a packaged app (e.g. out/IBP-darwin-arm64/IBP.app/Contents/MacOS/ibp).
@@ -29,7 +30,8 @@ test.beforeEach(async () => {
 });
 
 test.afterEach(async () => {
-  await app.close();
+  await app.close().catch(() => {}); // some tests close the app themselves
+
   await rm(root, { recursive: true, force: true });
 });
 
@@ -75,4 +77,50 @@ test("installs dependencies and shows the live preview", async () => {
     "aria-checked",
     "true",
   );
+});
+
+test("configures an AI provider, chats with streaming and never stores the key in plain text", async () => {
+  const KEY = "sk-e2e-PLAIN-TEXT-MUST-NOT-APPEAR";
+  const server = await startFakeOpenAIServer({ apiKey: KEY });
+  try {
+    const page = await app.firstWindow();
+    await page.getByRole("button", { name: "Definições" }).click();
+    await page.getByLabel("Adicionar fornecedor").selectOption("custom");
+    await page.getByRole("button", { name: "Adicionar fornecedor" }).click();
+
+    const card = page.getByRole("article", { name: "Custom" });
+    await card.getByLabel("Endereço da API").fill(server.baseUrl);
+    await card.getByRole("button", { name: "Guardar", exact: true }).nth(1).click();
+    await card.getByLabel("Chave da API").fill(KEY);
+    await card.getByRole("button", { name: "Guardar chave" }).click();
+    await expect(card.getByText("Chave guardada de forma segura")).toBeVisible();
+    await expect(card.getByLabel("Chave da API")).toHaveValue("");
+
+    await card.getByRole("button", { name: "Testar ligação" }).click();
+    await expect(card.getByText(/Ligado · 6 modelos/)).toBeVisible();
+    await expect(page.getByText("Ordem de utilização")).toBeVisible();
+    if (screenshots) await page.screenshot({ path: join(screenshots, "ai-settings.png") });
+
+    await page.getByRole("tab", { name: "Assistente" }).click();
+    const input = page.getByRole("textbox", { name: /Pergunta algo/ });
+    await input.fill("Olá, quem és?");
+    await input.press("Enter");
+    await expect(page.getByText(REPLY)).toBeVisible();
+    if (screenshots) await page.screenshot({ path: join(screenshots, "ai-chat.png") });
+  } finally {
+    await server.close();
+  }
+
+  await app.close();
+  // Every file IBP wrote may hold the key only as ciphertext.
+  const userData = join(root, "user-data");
+  const files = await readdir(userData, { recursive: true, withFileTypes: true });
+  let secretsFile = "";
+  for (const entry of files.filter((e) => e.isFile())) {
+    const path = join(entry.parentPath, entry.name);
+    const content = await readFile(path);
+    expect(content.includes(KEY), path).toBe(false);
+    if (entry.name === "secrets.json") secretsFile = content.toString("utf8");
+  }
+  expect(Object.keys(JSON.parse(secretsFile))).toHaveLength(1);
 });

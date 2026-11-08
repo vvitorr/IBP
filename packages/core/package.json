@@ -8,6 +8,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@ibp/model-router": "workspace:*",
     "@ibp/shared": "workspace:*",
     "zod": "4.6.7"
   }
