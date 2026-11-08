@@ -38,6 +38,14 @@
   redacted from provider error messages. It is sent only as `Authorization: Bearer` to the
   provider's own base URL, which must be `https://` (or `http://` on loopback). Tests assert the
   key appears in no posted message, log or file in plain text (unit and desktop e2e).
+- **Coding agent (Phase 3):** every path from the model is resolved inside the project
+  (relative only, `..` and symlink escapes refused), `.git/`, `node_modules/`, `.ibp/` and build
+  output are off limits, secret files (`.env*`, `*.pem`, `*.key`, `.npmrc`, `id_*`) are never
+  read or listed, binaries and large files are refused. Deleting files, changing configuration
+  and installing packages wait for an explicit approval card with the diff or command. Commands
+  are fixed argument arrays (no shell). File contents and command output are passed to the model
+  as data, and the system prompt says so; approvals are the backstop against prompt injection.
+  Accepting a run commits only the files the agent touched.
 - **Model traffic:** only the host calls providers; the Studio keeps `connect-src 'none'`.
   Usage logs hold counts and token numbers, never prompts or answers.
 - **Desktop app (Electron):** Studio served from `ibp://studio` (custom secure scheme, file
@@ -66,10 +74,8 @@ connect-src 'none'`. Single-instance lock so two windows never write the same re
 - Phase 2 (done): see "API keys" above. Linux without a keyring falls back to a hard-coded key;
   the UI warns. Remaining: never logged, never sent to the webview (the UI sees
   "configured: yes/no"); redact keys from error details.
-- Phase 3: tool registry with risk levels. Approval required for: deleting files, installing
-  packages, editing config/deploy/env files, running shell commands, network access. File tools
-  resolve real paths and refuse anything outside the project root (symlink-aware). Context
-  collector excludes `.env*`, keys, `node_modules`, build output and binaries.
+- Phase 3 (done): see "Coding agent" above. Remaining: deploy settings (Phase 7) will be another
+  approval-gated category; arbitrary shell commands stay unavailable to the agent.
 - Phase 5: Studio accepts only `selection` messages from the preview iframe, validated by schema.
 - Phase 7: deploy tokens in `SecretStorage`; production deploys need explicit approval; tokens
   never reach the generated site.
@@ -83,6 +89,9 @@ connect-src 'none'`. Single-instance lock so two windows never write the same re
 - **`npm install` runs lifecycle scripts** of the generated project's dependencies.
 - **The dev server listens on localhost**, reachable by other local processes.
 - **Windows DPAPI** protects keys from other users, not from other apps running as the same user.
+- **Project code goes to the model provider** when the agent reads files (local providers keep
+  it on the machine). Secret files are never sent.
+- **Agent journal is in memory:** closing the app mid-review leaves the edits in the project.
 - **Prompts go to the chosen provider.** Chat text (and later project code) leaves the machine
   unless a local provider (Ollama, LM Studio) is used.
 - **Free model providers may log prompts** (FreeLLMAPI notes this for FreeInference). Users must

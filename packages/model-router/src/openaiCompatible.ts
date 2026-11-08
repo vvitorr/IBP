@@ -2,6 +2,7 @@ import { readSse } from "./sse";
 import {
   ProviderError,
   type ChatChunk,
+  type ChatMessage,
   type ChatRequest,
   type ModelInfo,
   type ModelProvider,
@@ -54,6 +55,60 @@ export function toModelInfo(raw: RawModel): ModelInfo | null {
     streaming: "unknown",
     free: prices ? prices.every((p) => p === 0) : raw.id.endsWith(":free") ? true : null,
   };
+}
+
+/** Our message shape → OpenAI Chat Completions wire format. */
+export function toWireMessage(message: ChatMessage): Record<string, unknown> {
+  if (message.role === "tool") {
+    return { role: "tool", tool_call_id: message.toolCallId, content: message.content };
+  }
+  if (message.role === "assistant" && message.toolCalls?.length) {
+    return {
+      role: "assistant",
+      content: message.content || null,
+      tool_calls: message.toolCalls.map((call) => ({
+        id: call.id,
+        type: "function",
+        function: { name: call.name, arguments: call.arguments },
+      })),
+    };
+  }
+  return { role: message.role, content: message.content };
+}
+
+type WireToolCallDelta = {
+  index?: number;
+  id?: string;
+  function?: { name?: string; arguments?: string };
+};
+
+/**
+ * Tool calls may arrive whole or as fragments spread over many chunks (same `index`, arguments
+ * concatenated). Collects both shapes and returns the finished calls.
+ */
+export class ToolCallAssembler {
+  private readonly calls = new Map<number, { id: string; name: string; arguments: string }>();
+
+  add(deltas: WireToolCallDelta[]): void {
+    deltas.forEach((delta, position) => {
+      const index = typeof delta.index === "number" ? delta.index : position;
+      const call = this.calls.get(index) ?? { id: "", name: "", arguments: "" };
+      if (delta.id) call.id = delta.id;
+      if (delta.function?.name) call.name = call.name || delta.function.name;
+      call.arguments += delta.function?.arguments ?? "";
+      this.calls.set(index, call);
+    });
+  }
+
+  /** Finished calls in index order; empties the assembler. */
+  take(): { id: string; name: string; arguments: string }[] {
+    const done = [...this.calls.entries()]
+      .sort(([a], [b]) => a - b)
+      .filter(([, call]) => call.name)
+      .map(([index, call]) => ({ ...call, id: call.id || `call_${index}` }));
+    this.calls.clear();
+    return done;
+  }
 }
 
 /** A provider for any service exposing /models and /chat/completions the OpenAI way. */
@@ -109,7 +164,7 @@ export function createOpenAICompatibleProvider(options: OpenAICompatibleOptions)
   async function* chat(req: ChatRequest, signal?: AbortSignal): AsyncGenerator<ChatChunk> {
     const body = {
       model: req.model,
-      messages: req.messages,
+      messages: req.messages.map(toWireMessage),
       stream: true,
       stream_options: { include_usage: true },
       ...(req.maxTokens ? { max_tokens: req.maxTokens } : {}),
@@ -138,13 +193,17 @@ export function createOpenAICompatibleProvider(options: OpenAICompatibleOptions)
     );
     if (!response.body) throw new ProviderError("unavailable", "empty response body");
 
+    const toolCalls = new ToolCallAssembler();
+    const flush = function* (): Generator<ChatChunk> {
+      for (const call of toolCalls.take()) yield { type: "tool_call", ...call };
+    };
     try {
       for await (const data of readSse(response.body)) {
-        if (data === "[DONE]") return;
+        if (data === "[DONE]") break;
         let event: {
           error?: { message?: string; code?: number };
           choices?: {
-            delta?: { content?: string; tool_calls?: { function?: { name?: string } }[] };
+            delta?: { content?: string; tool_calls?: WireToolCallDelta[] };
             finish_reason?: string | null;
           }[];
           usage?: { prompt_tokens?: number; completion_tokens?: number } | null;
@@ -164,10 +223,11 @@ export function createOpenAICompatibleProvider(options: OpenAICompatibleOptions)
         }
         const choice = event.choices?.[0];
         if (choice?.delta?.content) yield { type: "text", text: choice.delta.content };
-        for (const call of choice?.delta?.tool_calls ?? []) {
-          if (call.function?.name) yield { type: "tool_call", name: call.function.name };
+        if (choice?.delta?.tool_calls) toolCalls.add(choice.delta.tool_calls);
+        if (choice?.finish_reason) {
+          yield* flush();
+          yield { type: "finish", reason: choice.finish_reason };
         }
-        if (choice?.finish_reason) yield { type: "finish", reason: choice.finish_reason };
         if (event.usage) {
           yield {
             type: "usage",
@@ -176,6 +236,7 @@ export function createOpenAICompatibleProvider(options: OpenAICompatibleOptions)
           };
         }
       }
+      yield* flush();
     } catch (error) {
       if (error instanceof ProviderError) throw error;
       if (signal?.aborted) throw new ProviderError("aborted", "request cancelled");

@@ -8,6 +8,7 @@ import {
   type Settings as StudioSettings,
 } from "@ibp/shared";
 import { useT } from "../i18n";
+import { AgentRun } from "./AgentRun";
 import { Button } from "./ui";
 
 const refKey = (ref: ModelRef) => `${ref.providerId}|${ref.modelId}`;
@@ -21,6 +22,11 @@ export function ChatPanel({
   onStop,
   onClear,
   onOpenSettings,
+  projectName,
+  busy,
+  onApprove,
+  onAccept,
+  onRevert,
 }: {
   chat: ChatState;
   ai: AiState | null;
@@ -29,6 +35,12 @@ export function ChatPanel({
   onStop: () => void;
   onClear: () => void;
   onOpenSettings: () => void;
+  /** Selected project: with one, the assistant works on it as a coding agent. */
+  projectName: string | null;
+  busy: boolean;
+  onApprove: (messageId: string, approvalId: string, approved: boolean) => void;
+  onAccept: (messageId: string) => void;
+  onRevert: (messageId: string) => void;
 }) {
   const t = useT();
   const [text, setText] = useState("");
@@ -59,6 +71,9 @@ export function ChatPanel({
   const last = chat.messages.at(-1);
   return (
     <div className="flex h-full flex-col">
+      <p className="shrink-0 truncate border-b border-line px-3 py-1.5 text-[12px] text-muted">
+        {projectName ? t("chat.workingOn", { name: projectName }) : t("chat.noProjectHint")}
+      </p>
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2" aria-live="polite">
         {!configured && (
           <div className="mb-3 flex flex-col items-start gap-2 rounded border border-line bg-raised p-2 text-[12px]">
@@ -84,6 +99,16 @@ export function ChatPanel({
               </span>
               {message.content && (
                 <p className="whitespace-pre-wrap break-words">{message.content}</p>
+              )}
+              {message.run && (
+                <AgentRun
+                  run={message.run}
+                  developer={developer}
+                  busy={busy}
+                  onApprove={(approvalId, approved) => onApprove(message.id, approvalId, approved)}
+                  onAccept={() => onAccept(message.id)}
+                  onRevert={() => onRevert(message.id)}
+                />
               )}
               {chat.streaming &&
                 message === last &&

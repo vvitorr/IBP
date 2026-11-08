@@ -78,6 +78,9 @@ export const ERROR_CODES = [
   "ai_invalid_url",
   "ai_busy",
   "secret_storage_unavailable",
+  "ai_no_tool_model",
+  "git_no_identity",
+  "git_failed",
   "unknown",
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -109,6 +112,9 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, MessageKey> = {
   ai_invalid_url: "error.aiInvalidUrl",
   ai_busy: "error.aiBusy",
   secret_storage_unavailable: "error.secretStorageUnavailable",
+  ai_no_tool_model: "error.aiNoToolModel",
+  git_no_identity: "error.gitNoIdentity",
+  git_failed: "error.gitFailed",
   unknown: "error.unknown",
 };
 
@@ -188,6 +194,65 @@ export const aiStateSchema = z.strictObject({
 });
 export type AiState = z.infer<typeof aiStateSchema>;
 
+// --- Coding agent (Phase 3). Steps, approvals and file changes shown in the Assistant. ---
+export const AGENT_TOOLS = [
+  "list_files",
+  "read_file",
+  "search",
+  "write_file",
+  "edit_file",
+  "delete_file",
+  "run_check",
+  "install_package",
+  "finish",
+  "unknown",
+] as const;
+
+export const agentStepSchema = z.strictObject({
+  id: z.string().min(1).max(64),
+  tool: z.enum(AGENT_TOOLS),
+  target: z.string().max(500),
+  status: z.enum(["running", "done", "failed", "denied"]),
+  detail: z.string().max(2000).optional(),
+});
+export type AgentStepView = z.infer<typeof agentStepSchema>;
+
+export const fileChangeSchema = z.strictObject({
+  path: z.string().max(500),
+  kind: z.enum(["created", "modified", "deleted"]),
+  additions: z.number().int().nonnegative(),
+  deletions: z.number().int().nonnegative(),
+  diff: z.string().max(45_000),
+});
+export type FileChangeView = z.infer<typeof fileChangeSchema>;
+
+export const agentApprovalSchema = z.strictObject({
+  id: z.string().min(1).max(64),
+  tool: z.enum(AGENT_TOOLS),
+  target: z.string().max(500),
+  preview: z.string().max(45_000),
+});
+
+export const AGENT_RUN_STATUSES = [
+  "running",
+  "done",
+  "failed",
+  "stopped",
+  "accepted",
+  "reverted",
+] as const;
+
+export const agentRunSchema = z.strictObject({
+  projectId: projectIdSchema,
+  status: z.enum(AGENT_RUN_STATUSES),
+  steps: z.array(agentStepSchema).max(300),
+  approval: agentApprovalSchema.nullable(),
+  changes: z.array(fileChangeSchema).max(200),
+  stoppedAtLimit: z.boolean(),
+  notice: z.enum(["accepted_commit", "accepted_no_git", "reverted"]).nullable(),
+});
+export type AgentRunView = z.infer<typeof agentRunSchema>;
+
 export const chatMessageSchema = z.strictObject({
   id: z.string().min(1).max(64),
   role: z.enum(["user", "assistant"]),
@@ -195,6 +260,7 @@ export const chatMessageSchema = z.strictObject({
   model: modelRefSchema.nullable(),
   at: z.string(),
   error: appErrorSchema.optional(),
+  run: agentRunSchema.optional(),
 });
 export type ChatMessageView = z.infer<typeof chatMessageSchema>;
 
@@ -295,6 +361,25 @@ export const webviewMessageSchema = z.discriminatedUnion("type", [
   }),
   z.strictObject({ type: z.literal("chat/stop"), requestId: requestIdSchema }),
   z.strictObject({ type: z.literal("chat/clear"), requestId: requestIdSchema }),
+
+  // Coding agent: answer an approval card; accept (commit) or revert a finished run.
+  z.strictObject({
+    type: z.literal("agent/approve"),
+    requestId: requestIdSchema,
+    messageId: z.string().min(1).max(64),
+    approvalId: z.string().min(1).max(64),
+    approved: z.boolean(),
+  }),
+  z.strictObject({
+    type: z.literal("agent/accept"),
+    requestId: requestIdSchema,
+    messageId: z.string().min(1).max(64),
+  }),
+  z.strictObject({
+    type: z.literal("agent/revert"),
+    requestId: requestIdSchema,
+    messageId: z.string().min(1).max(64),
+  }),
 ]);
 export type WebviewMessage = z.infer<typeof webviewMessageSchema>;
 export type WebviewRequest = Exclude<WebviewMessage, { type: "ready" }>;

@@ -182,6 +182,13 @@ export function App() {
                     onStop={() => void run({ type: "chat/stop" })}
                     onClear={() => void run({ type: "chat/clear" })}
                     onOpenSettings={() => setSettingsOpen(true)}
+                    projectName={selected && !selected.missing ? selected.name : null}
+                    busy={busy}
+                    onApprove={(messageId, approvalId, approved) =>
+                      void run({ type: "agent/approve", messageId, approvalId, approved })
+                    }
+                    onAccept={(messageId) => void run({ type: "agent/accept", messageId })}
+                    onRevert={(messageId) => void run({ type: "agent/revert", messageId })}
                   />
                 ) : (
                   <ProjectList

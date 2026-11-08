@@ -79,10 +79,21 @@ Decided in ADR-019 to ADR-021. Package `packages/model-router` + `packages/core/
 | Real providers (OpenRouter, Ollama, LM Studio, FreeLLMAPI)                                         | Not verified | No key or local server on the dev machine; needs a manual check with a real key            |
 | VS Code: AI settings and chat                                                                      | Implemented  | Same shared code; not covered by an automated VS Code test                                 |
 
-## Phase 3 — Coding agent — Planned
+## Phase 3 — Coding agent — Tested
 
-`AgentAdapter`, context collection, file read/create/edit tools with path containment, terminal
-tool with approvals, task planning, diff presentation, approve/revert through git. Cline SDK spike.
+Decided in ADR-022 to ADR-024. Package `packages/agent` + `packages/core/src/ai/agentRuns.ts`.
+
+| Item                                                                                     | Status       | Evidence                                                                             |
+| ---------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------ |
+| Tool calling in the model layer (fragmented calls, tool messages, context compaction)    | Tested       | Unit tests                                                                           |
+| `AgentAdapter` + `IbpAgent` loop (25-turn limit, project summary, language)              | Tested       | Unit tests with a scripted fake model                                                |
+| Guarded workspace: containment, symlinks, denied folders, secrets, binaries, size limits | Tested       | Unit tests                                                                           |
+| Tools: list, read, search, write, edit (unique match), delete, checks, install           | Tested       | Unit tests (risk classification, validation)                                         |
+| Approval cards for delete/config/install; declined actions never run                     | Tested       | Unit, controller and desktop tests                                                   |
+| Change review: diffs, Accept = commit only the agent's files, Revert = exact restore     | Tested       | Controller test with real Git (user's own file stays out of the commit); desktop e2e |
+| Assistant UI: "working on <project>", steps, approvals, changes with diffs               | Tested       | Desktop e2e                                                                          |
+| Real tool-capable models                                                                 | Not verified | Needs a real provider/key; Ollama `role: "tool"` history not documented              |
+| Agent inside the VS Code extension                                                       | Implemented  | Same shared code; no automated VS Code test                                          |
 
 ## Phase 4 — Website generation — Planned
 

@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { fitToContext } from "./context";
-import { createOpenAICompatibleProvider, toModelInfo } from "./openaiCompatible";
+import { fitToContext, OMITTED } from "./context";
+import {
+  createOpenAICompatibleProvider,
+  toModelInfo,
+  toWireMessage,
+  ToolCallAssembler,
+} from "./openaiCompatible";
 import { normalizeBaseUrl } from "./presets";
 import { probeModel } from "./probe";
 import { ModelRouter, RouteError, type Candidate, type RoutedChunk } from "./router";
@@ -37,6 +42,40 @@ describe("readSse", () => {
       ),
     );
     expect(events).toEqual(['{"a":1}', "one\ntwo", "[DONE]"]);
+  });
+});
+
+describe("tool calls", () => {
+  it("assembles fragments by index and whole calls alike", () => {
+    const assembler = new ToolCallAssembler();
+    assembler.add([{ index: 0, id: "a", function: { name: "read_file", arguments: '{"pa' } }]);
+    assembler.add([{ index: 1, id: "b", function: { name: "list_files", arguments: "{}" } }]);
+    assembler.add([{ index: 0, function: { arguments: 'th":"x"}' } }]);
+    expect(assembler.take()).toEqual([
+      { id: "a", name: "read_file", arguments: '{"path":"x"}' },
+      { id: "b", name: "list_files", arguments: "{}" },
+    ]);
+    assembler.add([{ function: { name: "finish", arguments: "{}" } }]); // no index, no id
+    expect(assembler.take()).toEqual([{ id: "call_0", name: "finish", arguments: "{}" }]);
+  });
+
+  it("maps tool messages to the OpenAI wire format", () => {
+    expect(
+      toWireMessage({
+        role: "assistant",
+        content: "",
+        toolCalls: [{ id: "c1", name: "f", arguments: "{}" }],
+      }),
+    ).toEqual({
+      role: "assistant",
+      content: null,
+      tool_calls: [{ id: "c1", type: "function", function: { name: "f", arguments: "{}" } }],
+    });
+    expect(toWireMessage({ role: "tool", toolCallId: "c1", content: "ok" })).toEqual({
+      role: "tool",
+      tool_call_id: "c1",
+      content: "ok",
+    });
   });
 });
 
@@ -154,6 +193,26 @@ describe("OpenAI-compatible provider", () => {
     expect(received).toHaveLength(1);
   });
 
+  it("streams fragmented tool calls as whole calls", async () => {
+    const chunks = await collect(
+      provider().chat({
+        model: "fake/agent",
+        messages: [{ role: "user", content: "cria um badge" }],
+        tools: [{ name: "list_files", description: "", parameters: {} }],
+      }),
+    );
+    expect(chunks).toContainEqual({
+      type: "tool_call",
+      id: "call_1",
+      name: "list_files",
+      arguments: "{}",
+    });
+    const body = server.requests.at(-1)?.body;
+    expect(body?.tools).toEqual([
+      { type: "function", function: { name: "list_files", description: "", parameters: {} } },
+    ]);
+  });
+
   it("probes streaming and tool support", async () => {
     expect(await probeModel(provider(), "fake/fast")).toEqual({ streaming: "yes", tools: "yes" });
   });
@@ -237,6 +296,39 @@ describe("ModelRouter", () => {
       [],
     );
     await expect(collect(r.stream([], "chat", ask))).rejects.toMatchObject({ code: "no_model" });
+  });
+});
+
+describe("fitToContext with tool results", () => {
+  it("keeps every message and shortens old tool results instead", () => {
+    const big = "x".repeat(8000);
+    const messages = [
+      { role: "system" as const, content: "s" },
+      { role: "user" as const, content: "task" },
+      {
+        role: "assistant" as const,
+        content: "",
+        toolCalls: [{ id: "1", name: "read_file", arguments: "{}" }],
+      },
+      { role: "tool" as const, toolCallId: "1", content: big },
+      {
+        role: "assistant" as const,
+        content: "",
+        toolCalls: [{ id: "2", name: "read_file", arguments: "{}" }],
+      },
+      { role: "tool" as const, toolCallId: "2", content: big },
+      {
+        role: "assistant" as const,
+        content: "",
+        toolCalls: [{ id: "3", name: "read_file", arguments: "{}" }],
+      },
+      { role: "tool" as const, toolCallId: "3", content: big },
+    ];
+    const fitted = fitToContext(messages, 4000); // 3000 tokens ≈ 12000 chars
+    expect(fitted).toHaveLength(messages.length);
+    expect(fitted[3]?.content).toBe(OMITTED);
+    expect(fitted[5]?.content).toBe(big); // the last two results stay intact
+    expect(fitted[7]?.content).toBe(big);
   });
 });
 
