@@ -8,8 +8,32 @@ import type { AddressInfo } from "node:net";
  * - fake/limited 429 with Retry-After: 2
  * - fake/broken  500
  * - fake/midway  two words, then the connection drops
+ * - fake/agent   scripted agent: list_files → write_file(src/components/Badge.tsx) → final text
+ * - fake/agent-config  asks to edit package.json (a high-risk tool) → final text
+ * Tool calls are streamed in fragments, the way OpenAI-style providers do.
  */
 export const REPLY = "Olá! Sou um modelo de teste do IBP.";
+export const AGENT_DONE = "Criei o componente Badge em src/components/Badge.tsx.";
+export const BADGE_SOURCE = `export function Badge({ label }: { label: string }) {
+  return <span className="rounded-sm bg-brand px-2 py-0.5 text-sm text-brand-contrast">{label}</span>;
+}
+`;
+
+/** What the scripted agents do at each step (by number of tool results already received). */
+const AGENT_SCRIPTS: Record<string, ({ name: string; args: object } | string)[]> = {
+  "fake/agent": [
+    { name: "list_files", args: {} },
+    { name: "write_file", args: { path: "src/components/Badge.tsx", content: BADGE_SOURCE } },
+    AGENT_DONE,
+  ],
+  "fake/agent-config": [
+    {
+      name: "edit_file",
+      args: { path: "package.json", old: '"private": true', new: '"private": false' },
+    },
+    "Feito.",
+  ],
+};
 
 export interface FakeServer {
   baseUrl: string;
@@ -61,6 +85,8 @@ export async function startFakeOpenAIServer(
           model("fake/broken"),
           model("fake/midway"),
           model("fake/paid", { pricing: { prompt: "0.000001", completion: "0.000002" } }),
+          model("fake/agent"),
+          model("fake/agent-config"),
         ],
       });
     }
@@ -78,6 +104,38 @@ export async function startFakeOpenAIServer(
     const chunk = (delta: object, finish: string | null = null) => ({
       choices: [{ index: 0, delta, finish_reason: finish }],
     });
+    const script = AGENT_SCRIPTS[model];
+    if (script) {
+      const done = (body.messages as { role: string }[]).filter((m) => m.role === "tool").length;
+      const step = script[Math.min(done, script.length - 1)] ?? "";
+      if (typeof step === "string") {
+        event(res, chunk({ content: step }));
+        event(res, chunk({}, "stop"));
+      } else {
+        const args = JSON.stringify(step.args);
+        const half = Math.ceil(args.length / 2);
+        const id = `call_${done + 1}`;
+        event(
+          res,
+          chunk({
+            tool_calls: [
+              { index: 0, id, type: "function", function: { name: step.name, arguments: "" } },
+            ],
+          }),
+        );
+        event(
+          res,
+          chunk({ tool_calls: [{ index: 0, function: { arguments: args.slice(0, half) } }] }),
+        );
+        event(
+          res,
+          chunk({ tool_calls: [{ index: 0, function: { arguments: args.slice(half) } }] }),
+        );
+        event(res, chunk({}, "tool_calls"));
+      }
+      event(res, "[DONE]");
+      return res.end();
+    }
     if (Array.isArray(body.tools) && body.tools.length) {
       event(
         res,

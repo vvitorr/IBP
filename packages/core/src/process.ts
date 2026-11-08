@@ -94,3 +94,31 @@ export const nodeProcessRunner: ProcessRunner = {
     };
   },
 };
+
+/**
+ * Runs one fixed command for the coding agent (checks, package installs) and returns its exit
+ * code and the last lines of output. Killed on abort or after `timeoutMs`.
+ */
+export function createCommandRunner(
+  runner: ProcessRunner,
+  env: () => Promise<NodeJS.ProcessEnv>,
+  timeoutMs = 180_000,
+) {
+  return async (command: string, args: string[], cwd: string, signal: AbortSignal) => {
+    const proc = runner.spawn(command, args, { cwd, env: await env() });
+    const lines: string[] = [];
+    proc.onOutput((line) => {
+      lines.push(line);
+      if (lines.length > 400) lines.shift();
+    });
+    const stop = () => void proc.kill();
+    signal.addEventListener("abort", stop, { once: true });
+    const timer = setTimeout(stop, timeoutMs);
+    const exitCode = await new Promise<number | null>((resolve) =>
+      proc.onExit((code, error) => resolve(error ? null : code)),
+    );
+    clearTimeout(timer);
+    signal.removeEventListener("abort", stop);
+    return { exitCode, output: lines.join("\n") };
+  };
+}

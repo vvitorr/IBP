@@ -189,3 +189,39 @@ was made. Facts cited here are sourced in [`../research/dependencies.md`](../res
 - After the first successful test, IBP suggests up to three models: free ones on OpenRouter
   (tool-capable and larger context first), any model on local servers. Paid models are never
   added automatically.
+
+## ADR-022 — `AgentAdapter` with IBP's own agent loop (2026-11-08)
+
+- **Decision:** `packages/agent` defines `AgentAdapter { id, run(task, io, signal) }`. The default
+  `IbpAgent` loops: model turn (through the router, task class `component`: tools + 32k context) →
+  tool calls → approval when risky → run → results back to the model, until no more tool calls,
+  `finish`, or 25 turns. The project summary (stack, dependency names, file tree, where texts and
+  design tokens live) goes in the system prompt; file contents are read on demand.
+- **Rejected:** driving Cline/Roo (see ADR-004). The Cline SDK stays a possible second adapter;
+  its approval and executor hooks are not confirmed yet.
+- **Consequences:** the Studio, the future visual editor and the project manager only talk to
+  `AgentAdapter`; swapping the agent does not touch them.
+
+## ADR-023 — Change review: journal, accept = commit only the agent's files (2026-11-08)
+
+- **Decision:** the agent's `Workspace` stores each file's previous state the first time it is
+  touched. The run ends with a list of changes (unified diffs via jsdiff). **Reverter** restores
+  exactly those files; **Aceitar** runs `git add -A -- <files>` and
+  `git commit -m "ibp: <request>" -- <files>`, so other changes the user had (staged or not)
+  never enter the commit. Without Git, accepting just closes the review. Never pushes.
+- **Rejected:** a work branch per run — switching branches under a running dev server and the
+  user's own edits is risky and confusing for beginners. Stashing — touches the user's changes.
+- **Limit:** the journal lives in memory. If the app closes before the user decides, the edits
+  stay in the working tree, visible in `git status`.
+
+## ADR-024 — Agent tool permissions (2026-11-08)
+
+- Automatic: `list_files`, `read_file`, `search`, `write_file`/`edit_file` on source files,
+  `run_check` (`npx --no-install tsc --noEmit` or `npm run build`: fixed commands that run the
+  project's own scripts, like the preview does).
+- Needs approval (shown with a diff or the exact command): `delete_file`, writes to
+  configuration (`package.json`, lockfile, `tsconfig*.json`, `*.config.*`, PostCSS/Tailwind
+  config, `.env*`, `.npmrc`), `install_package` (validated npm name).
+- Never: paths outside the project (symlink-safe), `.git/`, `node_modules/`, `.ibp/`, build
+  output; reading secret files (`.env*`, keys, `.npmrc`); binary files; reads > 200 KB or writes
+  > 500 KB. Declined actions are reported to the model with "do not try again".

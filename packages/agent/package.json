@@ -1,0 +1,16 @@
+{
+  "name": "@ibp/agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "IBP coding agent: AgentAdapter, the default IbpAgent loop, guarded and journaled workspace tools. Node only: no vscode/electron.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@ibp/model-router": "workspace:*",
+    "@ibp/shared": "workspace:*",
+    "diff": "9.0.0",
+    "zod": "4.6.7"
+  }
+}

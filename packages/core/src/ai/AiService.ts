@@ -14,6 +14,7 @@ import {
   type ModelProvider,
   type RoutedChunk,
   type TaskClass,
+  type ToolDefinition,
 } from "@ibp/model-router";
 import type {
   AiState,
@@ -269,6 +270,7 @@ export class AiService {
     messages: ChatMessage[],
     model: "auto" | ModelRef,
     signal?: AbortSignal,
+    tools?: ToolDefinition[],
   ): AsyncGenerator<RoutedChunk> {
     const refs = model === "auto" ? this.config.get().preferences : [model];
     const candidates: Candidate[] = [];
@@ -288,7 +290,12 @@ export class AiService {
 
     let started = Date.now();
     let tokens = { promptTokens: 0, completionTokens: 0 };
-    for await (const chunk of this.router.stream(candidates, task, { messages }, signal)) {
+    for await (const chunk of this.router.stream(
+      candidates,
+      task,
+      { messages, ...(tools ? { tools } : {}) },
+      signal,
+    )) {
       if (chunk.type === "route") {
         started = Date.now();
         tokens = { promptTokens: 0, completionTokens: 0 };

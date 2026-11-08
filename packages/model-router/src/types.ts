@@ -10,10 +10,17 @@ export interface ModelInfo {
   free: boolean | null;
 }
 
-export interface ChatMessage {
-  role: "system" | "user" | "assistant";
-  content: string;
+export interface ToolCall {
+  id: string;
+  name: string;
+  /** JSON-encoded arguments, exactly as the model produced them (may be invalid JSON). */
+  arguments: string;
 }
+
+export type ChatMessage =
+  | { role: "system" | "user"; content: string }
+  | { role: "assistant"; content: string; toolCalls?: ToolCall[] }
+  | { role: "tool"; toolCallId: string; content: string };
 
 export interface ToolDefinition {
   name: string;
@@ -32,7 +39,7 @@ export interface ChatRequest {
 
 export type ChatChunk =
   | { type: "text"; text: string }
-  | { type: "tool_call"; name: string }
+  | ({ type: "tool_call" } & ToolCall)
   | { type: "usage"; promptTokens: number; completionTokens: number }
   | { type: "finish"; reason: string };
 

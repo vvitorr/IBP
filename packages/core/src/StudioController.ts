@@ -8,11 +8,13 @@ import {
   type ProjectSummary,
   type WebviewRequest,
 } from "@ibp/shared";
+import { AgentRuns } from "./ai/agentRuns";
 import { AiService, toAiError } from "./ai/AiService";
 import { DevServerManager } from "./devServer";
 import { IbpError, toAppError } from "./errors";
 import type { HostPlatform } from "./HostPlatform";
-import type { ProcessRunner } from "./process";
+import { createCommandRunner, type ProcessRunner } from "./process";
+import { runGit, type GitRunner } from "./projects/git";
 import type { ProjectService } from "./projects/ProjectService";
 
 export interface StudioControllerOptions {
@@ -23,6 +25,7 @@ export interface StudioControllerOptions {
   /** Overrides for tests. */
   preview?: { readyTimeoutMs?: number; pollIntervalMs?: number; npm?: string };
   fetch?: typeof fetch;
+  git?: GitRunner;
 }
 
 const CHAT_HISTORY = 200;
@@ -50,6 +53,7 @@ export class StudioController {
   private readonly aiReady: Promise<void>;
   private chat: ChatMessageView[] = [];
   private chatAbort: AbortController | undefined;
+  private readonly agents: AgentRuns;
 
   constructor(options: StudioControllerOptions) {
     this.host = options.host;
@@ -59,6 +63,14 @@ export class StudioController {
       secrets: options.host.secrets,
       log: (m) => options.host.log("warn", m),
       ...(options.fetch ? { fetch: options.fetch } : {}),
+    });
+    this.agents = new AgentRuns({
+      ai: this.ai,
+      commands: createCommandRunner(options.runner, options.env),
+      git: options.git ?? runGit,
+      post: (message) => this.host.post(message),
+      pushChat: () => this.pushChat(),
+      language: () => this.host.readSettings().language,
     });
     this.aiReady = this.ai.load().catch((error: unknown) => {
       options.host.log("error", `AI settings: ${String(error)}`);
@@ -131,7 +143,10 @@ export class StudioController {
     }
     if (message.type.startsWith("ai/")) await this.pushAi();
     else if (message.type.startsWith("chat/")) this.pushChat();
-    else await this.pushState(!message.type.startsWith("preview/"));
+    else if (message.type.startsWith("agent/")) {
+      this.pushChat();
+      await this.pushState(true);
+    } else await this.pushState(!message.type.startsWith("preview/"));
   }
 
   async pushAi(): Promise<void> {
@@ -327,8 +342,23 @@ export class StudioController {
         this.chatAbort?.abort();
         this.chat = [];
         break;
+      case "agent/approve":
+        this.agents.approve(message.messageId, message.approvalId, message.approved);
+        break;
+      case "agent/accept":
+        await this.agents.accept(this.message(message.messageId));
+        break;
+      case "agent/revert":
+        await this.agents.revert(this.message(message.messageId));
+        break;
     }
     return undefined;
+  }
+
+  private message(id: string): ChatMessageView {
+    const found = this.chat.find((m) => m.id === id);
+    if (!found) throw new IbpError("invalid_message", "unknown message");
+    return found;
   }
 
   private async startChat(text: string, model: "auto" | ModelRef, projectId: string | null) {
@@ -358,6 +388,19 @@ export class StudioController {
     this.chat = [...this.chat, user, answer].slice(-CHAT_HISTORY);
     this.chatAbort = new AbortController();
     this.pushChat();
+
+    // With a project selected the assistant is the coding agent on that project.
+    if (project && !project.missing) {
+      void this.agents
+        .start(answer, project, text, history.slice(-10), model, this.chatAbort.signal)
+        .finally(async () => {
+          this.chatAbort = undefined;
+          this.pushChat();
+          await this.pushAi();
+          await this.pushState(true);
+        });
+      return;
+    }
 
     const system = this.t("chat.system", {
       project: project

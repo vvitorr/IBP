@@ -87,6 +87,19 @@ Facts used (accessed 2026-11-07):
   `@types/vscode` 1.125).
 - No new npm dependencies: the model layer uses Node's built-in `fetch`.
 
+## 2d. Phase 3 facts (accessed 2026-11-08)
+
+| Package       | Version | License      | Where | Why                                                                             |
+| ------------- | ------- | ------------ | ----- | ------------------------------------------------------------------------------- |
+| diff (jsdiff) | 9.0.0   | BSD-3-Clause | agent | Unified diffs for the change review and approval previews; ships its own types. |
+
+- OpenRouter tool calling (Chat Completions): tools as `{type:"function", function:{…}}`,
+  assistant `tool_calls` with JSON-string `arguments`, results as `{role:"tool", tool_call_id}`,
+  `tools` resent on every request. **Unverified:** streaming fragment format; the client
+  assembles by `index` and also accepts whole calls in one chunk.
+- Ollama: `tools` supported on `/v1/chat/completions`; `tool_choice` not; `role:"tool"` history
+  not documented.
+
 ## 3. FreeLLMAPI
 
 - Repository: <https://github.com/tashfeenahmed/freellmapi> (the original; forks with the same

@@ -1,8 +1,9 @@
-import { mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { _electron as electron, expect, test, type ElectronApplication } from "@playwright/test";
-import { REPLY, startFakeOpenAIServer } from "@ibp/model-router/testing";
+import { BADGE_SOURCE, REPLY, startFakeOpenAIServer } from "@ibp/model-router/testing";
 
 const main = join(__dirname, "..", "dist", "main.js");
 // Set IBP_APP_EXECUTABLE to test a packaged app (e.g. out/IBP-darwin-arm64/IBP.app/Contents/MacOS/ibp).
@@ -97,7 +98,7 @@ test("configures an AI provider, chats with streaming and never stores the key i
     await expect(card.getByLabel("Chave da API")).toHaveValue("");
 
     await card.getByRole("button", { name: "Testar ligação" }).click();
-    await expect(card.getByText(/Ligado · 6 modelos/)).toBeVisible();
+    await expect(card.getByText(/Ligado · 8 modelos/)).toBeVisible();
     await expect(page.getByText("Ordem de utilização")).toBeVisible();
     if (screenshots) await page.screenshot({ path: join(screenshots, "ai-settings.png") });
 
@@ -123,4 +124,70 @@ test("configures an AI provider, chats with streaming and never stores the key i
     if (entry.name === "secrets.json") secretsFile = content.toString("utf8");
   }
   expect(Object.keys(JSON.parse(secretsFile))).toHaveLength(1);
+});
+
+test("the coding agent creates a component; the user reverts, then accepts with a commit", async () => {
+  const server = await startFakeOpenAIServer();
+  try {
+    const page = await app.firstWindow();
+    await page.getByLabel("Nome do site").fill("Oficina Rui");
+    await page.getByRole("button", { name: "Criar projeto" }).click();
+    await expect(page.getByRole("button", { name: /Oficina Rui/ })).toBeVisible();
+
+    // Provider pointing at the fake server, with the scripted agent model as the only choice.
+    await page.getByRole("button", { name: "Definições" }).click();
+    await page.getByLabel("Adicionar fornecedor").selectOption("custom");
+    await page.getByRole("button", { name: "Adicionar fornecedor" }).click();
+    const card = page.getByRole("article", { name: "Custom" });
+    await card.getByLabel("Endereço da API").fill(server.baseUrl);
+    await card.getByRole("button", { name: "Guardar", exact: true }).nth(1).click();
+    await card.getByRole("button", { name: "Testar ligação" }).click();
+    await expect(card.getByText(/Ligado/)).toBeVisible();
+    const remove = page.getByRole("button", { name: "Retirar" });
+    for (let left = await remove.count(); left > 0; left--) {
+      await remove.first().click();
+      await expect(remove).toHaveCount(left - 1); // wait for the list to update before the next click
+    }
+    await card.getByLabel("Filtrar modelos").fill("fake/agent");
+    await card
+      .getByRole("row", { name: /fake\/agent\s/ })
+      .getByRole("button", { name: "Usar" })
+      .click();
+    await page.getByRole("button", { name: "Voltar ao projeto" }).click();
+
+    await page.getByRole("tab", { name: "Assistente" }).click();
+    await expect(page.getByText("A trabalhar em: Oficina Rui")).toBeVisible();
+    const input = page.getByRole("textbox", { name: /Pergunta algo/ });
+    const projectDir = join(sites, "oficina-rui");
+    const badge = join(projectDir, "src", "components", "Badge.tsx");
+
+    await input.fill("Cria um componente Badge");
+    await input.press("Enter");
+    await expect(page.getByText("Escreveu src/components/Badge.tsx")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Reverter" })).toBeVisible();
+    expect(await readFile(badge, "utf8")).toBe(BADGE_SOURCE);
+    await page.getByRole("button", { name: "Ver diferenças" }).first().click();
+    if (screenshots) await page.screenshot({ path: join(screenshots, "agent-review.png") });
+
+    await page.getByRole("button", { name: "Reverter" }).click();
+    await expect(page.getByText("Alterações revertidas")).toBeVisible();
+    expect(await stat(badge).catch(() => null)).toBeNull();
+
+    await input.fill("Cria um componente Badge");
+    await input.press("Enter");
+    await expect(page.getByRole("button", { name: "Aceitar alterações" })).toBeVisible();
+    await page.getByRole("button", { name: "Aceitar alterações" }).click();
+    await expect(page.getByText(/Alterações aceites/).last()).toBeVisible();
+    const last = execFileSync("git", ["log", "-1", "--format=%s", "--name-only"], {
+      cwd: projectDir,
+      encoding: "utf8",
+    });
+    expect(last.trim().split("\n")).toEqual([
+      "ibp: Cria um componente Badge",
+      "",
+      "src/components/Badge.tsx",
+    ]);
+  } finally {
+    await server.close();
+  }
 });
