@@ -293,6 +293,12 @@ export const ptPT = {
   "error.gitFailed": "O Git falhou ao guardar as alterações. Vê os detalhes técnicos.",
   "agent.steps": "Passos do assistente",
   "agent.changes.titleOne": "Alterações (1 ficheiro)",
+  "agent.step.generate_content": "Escreveu os textos do site",
+  "site.generateRequest": 'Escreve os textos do site "{name}" a partir da descrição.',
+  "site.generate": "Gerar textos com IA",
+  "site.generate.hint":
+    "Escreve os títulos, a apresentação e os serviços a partir da descrição do negócio. Revês tudo antes de aceitar.",
+  "create.generate": "Gerar os textos com IA a partir da descrição",
 } as const;
 
 export type MessageKey = keyof typeof ptPT;

@@ -289,4 +289,10 @@ export const en: Record<MessageKey, string> = {
   "error.gitFailed": "Git failed to save the changes. See the technical details.",
   "agent.steps": "Assistant steps",
   "agent.changes.titleOne": "Changes (1 file)",
+  "agent.step.generate_content": "Wrote the website copy",
+  "site.generateRequest": 'Write the copy for the website "{name}" from its description.',
+  "site.generate": "Write copy with AI",
+  "site.generate.hint":
+    "Writes the headings, introduction and services from the business description. You review everything before accepting.",
+  "create.generate": "Write the copy with AI from the description",
 };

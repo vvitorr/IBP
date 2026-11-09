@@ -10,6 +10,8 @@ import type { AddressInfo } from "node:net";
  * - fake/midway  two words, then the connection drops
  * - fake/agent   scripted agent: list_files → write_file(src/components/Badge.tsx) → final text
  * - fake/agent-config  asks to edit package.json (a high-risk tool) → final text
+ * - fake/content        site copy as JSON inside prose and a ```json fence
+ * - fake/content-retry  invalid JSON first, valid JSON after being told so
  * Tool calls are streamed in fragments, the way OpenAI-style providers do.
  */
 export const REPLY = "Olá! Sou um modelo de teste do IBP.";
@@ -18,6 +20,26 @@ export const BADGE_SOURCE = `export function Badge({ label }: { label: string })
   return <span className="rounded-sm bg-brand px-2 py-0.5 text-sm text-brand-contrast">{label}</span>;
 }
 `;
+
+export const CONTENT_COPY = {
+  theme: "terracotta",
+  tagline: "Petiscos da casa no centro do Porto.",
+  hero: {
+    eyebrow: "Tasca",
+    title: "Petiscos e vinho da casa",
+    text: "Comida simples, feita no dia, para partilhar à mesa.",
+    cta: "Reservar mesa",
+  },
+  about: { title: "A nossa casa", text: "Uma tasca de bairro.\n\nCozinha simples e honesta." },
+  services: {
+    title: "Na tasca",
+    items: [
+      { title: "Almoços", text: "Prato do dia ao almoço." },
+      { title: "Petiscos", text: "Para partilhar ao fim da tarde." },
+      { title: "Grupos", text: "Mesas para grupos com reserva." },
+    ],
+  },
+};
 
 /** What the scripted agents do at each step (by number of tool results already received). */
 const AGENT_SCRIPTS: Record<string, ({ name: string; args: object } | string)[]> = {
@@ -87,6 +109,8 @@ export async function startFakeOpenAIServer(
           model("fake/paid", { pricing: { prompt: "0.000001", completion: "0.000002" } }),
           model("fake/agent"),
           model("fake/agent-config"),
+          model("fake/content"),
+          model("fake/content-retry"),
         ],
       });
     }
@@ -104,6 +128,18 @@ export async function startFakeOpenAIServer(
     const chunk = (delta: object, finish: string | null = null) => ({
       choices: [{ index: 0, delta, finish_reason: finish }],
     });
+    if (model === "fake/content" || model === "fake/content-retry") {
+      const told =
+        (body.messages as { role: string }[]).filter((m) => m.role === "user").length > 1;
+      const reply =
+        model === "fake/content-retry" && !told
+          ? '{"theme": "terracotta", "tagline": '
+          : `Aqui está:\n\n\`\`\`json\n${JSON.stringify(CONTENT_COPY)}\n\`\`\``;
+      event(res, chunk({ content: reply }));
+      event(res, chunk({}, "stop"));
+      event(res, "[DONE]");
+      return res.end();
+    }
     const script = AGENT_SCRIPTS[model];
     if (script) {
       const done = (body.messages as { role: string }[]).filter((m) => m.role === "tool").length;

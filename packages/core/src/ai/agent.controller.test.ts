@@ -221,6 +221,21 @@ describe("coding agent in the Studio", () => {
     );
   });
 
+  it("writes the site copy from the description as a reviewable change", async () => {
+    await useModel("fake/content");
+    expect((await send({ type: "site/generate", id: project.id, model: "auto" })).ok).toBe(true);
+    await until(() => !chat().streaming);
+    expect(answer()?.run).toMatchObject({
+      status: "done",
+      steps: [{ tool: "generate_content", status: "done" }],
+      changes: [{ path: "src/content/site.json", kind: "modified" }],
+    });
+    const site = JSON.parse(await readFile(join(project.path, "src/content/site.json"), "utf8"));
+    expect(site.theme).toBe("terracotta");
+    expect((await send({ type: "agent/accept", messageId: answer()?.id })).ok).toBe(true);
+    expect(git("log", "-1", "--format=%s").trim()).toMatch(/^ibp: Escreve os textos do site/);
+  });
+
   it("explains when no model can use tools", async () => {
     await send({ type: "ai/preferences/set", order: [] });
     await ask("Cria um componente Badge");

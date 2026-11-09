@@ -205,6 +205,7 @@ export const AGENT_TOOLS = [
   "run_check",
   "install_package",
   "finish",
+  "generate_content",
   "unknown",
 ] as const;
 
@@ -369,6 +370,13 @@ export const webviewMessageSchema = z.discriminatedUnion("type", [
     messageId: z.string().min(1).max(64),
     approvalId: z.string().min(1).max(64),
     approved: z.boolean(),
+  }),
+  // Writes the site's copy from the project description (reviewed like an agent run).
+  z.strictObject({
+    type: z.literal("site/generate"),
+    requestId: requestIdSchema,
+    id: projectIdSchema,
+    model: z.union([z.literal("auto"), modelRefSchema]),
   }),
   z.strictObject({
     type: z.literal("agent/accept"),

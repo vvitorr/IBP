@@ -143,7 +143,7 @@ export class StudioController {
     }
     if (message.type.startsWith("ai/")) await this.pushAi();
     else if (message.type.startsWith("chat/")) this.pushChat();
-    else if (message.type.startsWith("agent/")) {
+    else if (message.type.startsWith("agent/") || message.type === "site/generate") {
       this.pushChat();
       await this.pushState(true);
     } else await this.pushState(!message.type.startsWith("preview/"));
@@ -345,6 +345,9 @@ export class StudioController {
       case "agent/approve":
         this.agents.approve(message.messageId, message.approvalId, message.approved);
         break;
+      case "site/generate":
+        await this.startGeneration(message.id, message.model);
+        break;
       case "agent/accept":
         await this.agents.accept(this.message(message.messageId));
         break;
@@ -353,6 +356,39 @@ export class StudioController {
         break;
     }
     return undefined;
+  }
+
+  /** Writes the site's copy with AI, shown as an Assistant exchange the user can review. */
+  private async startGeneration(projectId: string, model: "auto" | ModelRef) {
+    if (this.chatAbort) throw new IbpError("ai_busy");
+    const project = await this.service.get(projectId);
+    if (project.missing) throw new IbpError("folder_missing", project.path);
+    const at = new Date().toISOString();
+    const request = this.t("site.generateRequest", { name: project.name });
+    const user: ChatMessageView = {
+      id: randomUUID(),
+      role: "user",
+      content: request,
+      model: null,
+      at,
+    };
+    const answer: ChatMessageView = {
+      id: randomUUID(),
+      role: "assistant",
+      content: "",
+      model: null,
+      at,
+    };
+    this.chat = [...this.chat, user, answer].slice(-CHAT_HISTORY);
+    this.chatAbort = new AbortController();
+    this.pushChat();
+    void this.agents
+      .generate(answer, project, request, model, this.chatAbort.signal)
+      .finally(async () => {
+        this.chatAbort = undefined;
+        this.pushChat();
+        await this.pushAi();
+      });
   }
 
   private message(id: string): ChatMessageView {
