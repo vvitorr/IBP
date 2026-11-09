@@ -1,14 +1,16 @@
 import { site } from "../content/site";
+import { Container } from "./ui";
 
 export function Footer() {
+  const { business } = site;
   return (
     <footer data-editor-id="site-footer" className="bg-ink text-paper">
-      <div className="mx-auto flex max-w-6xl flex-col gap-2 px-5 py-8 text-sm sm:flex-row sm:justify-between">
+      <Container className="flex flex-col gap-2 py-8 text-sm sm:flex-row sm:justify-between">
         <p>
-          © {new Date().getFullYear()} {site.client || site.name}
+          © {new Date().getFullYear()} {business.client || business.name}
         </p>
-        <p className="opacity-70">{site.contact.email}</p>
-      </div>
+        {business.email && <p className="opacity-70">{business.email}</p>}
+      </Container>
     </footer>
   );
 }
