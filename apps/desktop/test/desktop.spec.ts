@@ -69,7 +69,9 @@ test("installs dependencies and shows the live preview", async () => {
   await page.getByRole("button", { name: "Ver site" }).click();
 
   const frame = page.frameLocator("iframe");
-  await expect(frame.getByRole("heading", { name: "Cozinha feita com tempo" })).toBeVisible({ timeout: 60_000 });
+  await expect(frame.getByRole("heading", { name: "Cozinha feita com tempo" })).toBeVisible({
+    timeout: 60_000,
+  });
   if (screenshots) await page.screenshot({ path: join(screenshots, "preview-desktop.png") });
 
   await page.getByRole("radio", { name: "Telemóvel" }).click();
