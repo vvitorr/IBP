@@ -48,6 +48,7 @@ function host(): HostPlatform {
     updateSetting: async () => {},
     projectsRoot: () => root,
     pickFolder: async () => undefined,
+    pickFile: async () => undefined,
     confirm: async () => confirmAnswer,
     notify: () => {},
     currentProjectPath: () => undefined,

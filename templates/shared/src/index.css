@@ -1,15 +1,19 @@
 @import "tailwindcss";
 
-/* Brand tokens: change these to restyle the whole site. */
+/*
+ * Design tokens. Values come from the theme chosen in src/content/site.json (see
+ * src/content/themes.ts), applied as --ibp-* custom properties on <html>.
+ */
 @theme {
-  --color-brand: #1f4e45;
-  --color-brand-contrast: #ffffff;
-  --color-ink: #1d1d1b;
-  --color-soft: #5c5c57;
-  --color-paper: #fbfaf7;
-  --color-line: #e4e2dc;
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-display: Georgia, "Times New Roman", serif;
+  --color-brand: var(--ibp-brand, #2d4a6b);
+  --color-brand-contrast: var(--ibp-brand-contrast, #ffffff);
+  --color-ink: var(--ibp-ink, #1d2228);
+  --color-soft: var(--ibp-soft, #5a636d);
+  --color-paper: var(--ibp-paper, #fafafa);
+  --color-surface: var(--ibp-surface, #eff1f3);
+  --color-line: var(--ibp-line, #e0e3e7);
+  --font-sans: var(--ibp-font-sans, ui-sans-serif, system-ui, sans-serif);
+  --font-display: var(--ibp-font-display, Georgia, serif);
 }
 
 @layer base {

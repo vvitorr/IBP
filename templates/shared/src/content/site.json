@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "theme": "slate",
+  "business": {
+    "name": "Website",
+    "client": "",
+    "tagline": "Conheça o que fazemos e fale connosco.",
+    "description": "",
+    "phone": "+351 220 000 000",
+    "email": "geral@exemplo.pt",
+    "address": "Rua de Exemplo, 123, 4000-000 Porto",
+    "hours": [
+      {
+        "days": "Segunda a sexta",
+        "time": "9h00–18h00"
+      }
+    ]
+  },
+  "pages": [
+    {
+      "slug": "",
+      "title": "Website",
+      "description": "Conheça o que fazemos e fale connosco.",
+      "sections": [
+        {
+          "id": "inicio",
+          "type": "hero",
+          "title": "Bem-vindo",
+          "text": "Conheça o que fazemos e fale connosco.",
+          "cta": {
+            "label": "Contactar",
+            "href": "#contactos"
+          }
+        },
+        {
+          "id": "sobre",
+          "navLabel": "Sobre",
+          "type": "about",
+          "title": "Sobre nós",
+          "text": "Conte aqui a história do negócio, a equipa e o que o torna diferente."
+        },
+        {
+          "id": "servicos",
+          "navLabel": "Serviços",
+          "type": "services",
+          "title": "Serviços",
+          "items": [
+            {
+              "title": "Serviço principal",
+              "text": "Descreva o serviço mais procurado pelos clientes."
+            },
+            {
+              "title": "Segundo serviço",
+              "text": "Explique o benefício para o cliente em uma ou duas frases."
+            },
+            {
+              "title": "Terceiro serviço",
+              "text": "Mantenha o texto curto e concreto."
+            }
+          ]
+        },
+        {
+          "id": "horario",
+          "type": "hours",
+          "title": "Horário"
+        },
+        {
+          "id": "contactos",
+          "navLabel": "Contactos",
+          "type": "contact",
+          "title": "Contactos"
+        }
+      ]
+    }
+  ]
+}

@@ -17,7 +17,7 @@ export interface AgentTask {
 
 export interface AgentStep {
   id: string;
-  tool: ToolName | "unknown";
+  tool: ToolName | "unknown" | "generate_content";
   target: string;
   status: "running" | "done" | "failed" | "denied";
   detail?: string;

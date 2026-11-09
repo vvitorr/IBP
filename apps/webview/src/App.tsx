@@ -12,6 +12,7 @@ import {
 } from "@ibp/shared";
 import { CreateProject } from "./components/CreateProject";
 import { ChatPanel } from "./components/ChatPanel";
+import { ContentEditor } from "./components/ContentEditor";
 import { ErrorNotice } from "./components/ErrorNotice";
 import { PreviewPane } from "./components/PreviewPane";
 import { ProjectList } from "./components/ProjectList";
@@ -59,7 +60,7 @@ export function App() {
   const [state, setState] = useState<StateMessage | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [tab, setTab] = useState<"preview" | "project">("preview");
+  const [tab, setTab] = useState<"preview" | "content" | "project">("preview");
   const [leftTab, setLeftTab] = useState<"projects" | "chat">("projects");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [ai, setAi] = useState<AiState | null>(null);
@@ -117,18 +118,26 @@ export function App() {
   const withSelected = (type: "preview/start" | "projects/installDeps") =>
     selected && void run({ type, id: selected.id });
 
-  async function run(input: RequestInput): Promise<boolean> {
+  async function runResponse(input: RequestInput) {
     setBusy(true);
     setError(null);
     const response = await request(input);
     setBusy(false);
-    if (response.ok) {
-      if (response.projectId) setSelectedId(response.projectId);
-      return true;
-    }
-    if (response.error.code !== "cancelled") setError(response.error);
-    return false;
+    if (response.ok && response.projectId) setSelectedId(response.projectId);
+    if (!response.ok && response.error.code !== "cancelled") setError(response.error);
+    return response;
   }
+
+  async function run(input: RequestInput): Promise<boolean> {
+    return (await runResponse(input)).ok;
+  }
+
+  /** Writes the site's copy with AI; the result shows up for review in the Assistant. */
+  function generate(id: string) {
+    setLeftTab("chat");
+    void run({ type: "site/generate", id, model: "auto" });
+  }
+  const canGenerate = (ai?.preferences.length ?? 0) > 0 && !chat.streaming;
 
   return (
     <LocaleContext value={settings.language}>
@@ -223,10 +232,13 @@ export function App() {
                   <CreateProject
                     busy={busy}
                     onCancel={projects?.length ? () => setCreating(false) : null}
-                    onSubmit={(details, template) =>
-                      void run({ type: "projects/create", details, template }).then(
-                        (ok) => ok && setCreating(false),
-                      )
+                    canGenerate={canGenerate}
+                    onSubmit={(details, template, withAi) =>
+                      void runResponse({ type: "projects/create", details, template }).then((r) => {
+                        if (!r.ok) return;
+                        setCreating(false);
+                        if (withAi && r.projectId) generate(r.projectId);
+                      })
                     }
                   />
                 </div>
@@ -236,7 +248,7 @@ export function App() {
                     role="tablist"
                     className="flex h-9 shrink-0 items-end gap-1 border-b border-line px-2"
                   >
-                    {(["preview", "project"] as const).map((key) => (
+                    {(["preview", "content", "project"] as const).map((key) => (
                       <button
                         key={key}
                         type="button"
@@ -249,7 +261,7 @@ export function App() {
                             : "border-transparent text-muted hover:text-text"
                         }`}
                       >
-                        {key === "preview" ? t("tab.preview") : t("tab.project")}
+                        {t(`tab.${key}`)}
                       </button>
                     ))}
                   </div>
@@ -269,6 +281,18 @@ export function App() {
                         onRestart={() => void run({ type: "preview/restart" })}
                         onOpenExternal={() => void run({ type: "preview/openExternal" })}
                       />
+                    ) : tab === "content" ? (
+                      selected && !selected.missing ? (
+                        <ContentEditor
+                          key={selected.id}
+                          project={selected}
+                          canGenerate={canGenerate}
+                          onGenerate={() => generate(selected.id)}
+                          onError={setError}
+                        />
+                      ) : (
+                        <p className="p-6 text-muted">{t("preview.noProject")}</p>
+                      )
                     ) : (
                       <ProjectOverview
                         project={selected}

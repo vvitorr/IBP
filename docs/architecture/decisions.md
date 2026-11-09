@@ -225,3 +225,45 @@ was made. Facts cited here are sourced in [`../research/dependencies.md`](../res
 - Never: paths outside the project (symlink-safe), `.git/`, `node_modules/`, `.ibp/`, build
   output; reading secret files (`.env*`, keys, `.npmrc`); binary files; reads > 200 KB or writes
   > 500 KB. Declined actions are reported to the model with "do not try again".
+
+## ADR-025 — Site content lives in one validated JSON file (2026-11-09)
+
+- **Decision:** every generated site keeps its texts, pages, sections and theme in
+  `src/content/site.json` (schema `siteContentSchema` in `packages/shared/src/site.ts`, version 1).
+  The template components only render that file; IBP writes it only after validation. Sections are
+  a closed list (hero, about, services, menu, hours, testimonials, gallery, contact); the home page
+  comes first, slugs and section ids are unique, links and image paths are restricted
+  (internal paths, anchors, `tel:`, `mailto:`, `https:`; images `/images/…` or `https:`).
+- **Why:** the content editor, the AI copy writer and the coding agent all change one structured
+  file instead of editing JSX, so edits stay small, reviewable and safe to revert. Both stacks
+  (Vite + React and Next.js) share the components in `templates/shared`.
+- **Consequences:** a site whose `site.json` the user broke by hand shows "content invalid" in the
+  editor until fixed (the agent can still edit it). Schema changes need a version bump and a
+  migration.
+
+## ADR-026 — Curated themes and industry presets (2026-11-09)
+
+- **Decision:** eight themes (palette + font pairing, Google Fonts) applied through `--ibp-*` CSS
+  variables. A new project starts from an industry preset (`packages/core/src/site/presets.ts`):
+  theme, sections and pt-PT placeholder copy; restaurants and cafés get a `/menu` page,
+  construction a gallery. Presets never contain prices, phone numbers or reviews.
+- **Rejected:** free colour pickers for beginners — themes keep contrast and type pairing sound.
+
+## ADR-027 — AI copy writing as a reviewed change (2026-11-09)
+
+- **Decision:** "Gerar textos com IA" asks the model (task class `copy`, no tools) for one JSON
+  object: theme, tagline, hero, about and services. The reply is validated (one retry with the
+  error), merged into `site.json` (contacts, hours, other pages and images untouched) and written
+  through the agent `Workspace`, so it appears in the change review with Accept/Revert like any
+  agent run. The prompt forbids invented prices, contacts, awards and reviews.
+- **Why:** structured output works with small free models that cannot use tools, and the user
+  keeps the final say.
+
+## ADR-028 — Content editor and image import (2026-11-09)
+
+- **Decision:** the Studio "Conteúdo" tab edits `site.json` as a form (business, hours, theme,
+  pages, sections: add, hide, reorder, remove). Save writes immediately (no review: the user made
+  the change). Images are chosen with the host's file picker and copied by the host into
+  `public/images/<name>-<sha256 8>.<ext>`; the webview never sends file paths.
+- **Limits:** PNG, JPEG, WebP or AVIF, checked by content, up to 5 MB; SVG refused (it can carry
+  scripts). No resizing or compression yet.

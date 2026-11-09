@@ -1,13 +1,22 @@
 import { join } from "node:path";
 import {
+  ContentGenerator,
   IbpAgent,
   Workspace,
   type AgentAdapter,
   type AgentEvent,
+  type AgentIO,
   type ApprovalRequest,
   type CommandRunner,
 } from "@ibp/agent";
-import type { ChatMessageView, HostMessage, Locale, ModelRef, ProjectSummary } from "@ibp/shared";
+import type {
+  ChatMessageView,
+  ErrorCode,
+  HostMessage,
+  Locale,
+  ModelRef,
+  ProjectSummary,
+} from "@ibp/shared";
 import { IbpError, toAppError } from "../errors";
 import { exists } from "../fsutil";
 import type { GitRunner } from "../projects/git";
@@ -41,14 +50,60 @@ export class AgentRuns {
 
   constructor(private readonly deps: AgentRunsDeps) {}
 
-  /** Runs to completion; never throws (failures end up on the answer message). */
-  async start(
+  /** Coding-agent run on a project. Never throws (failures end up on the answer message). */
+  start(
     answer: ChatMessageView,
     project: ProjectSummary,
     request: string,
     history: { role: "user" | "assistant"; content: string }[],
     model: "auto" | ModelRef,
     signal: AbortSignal,
+  ): Promise<void> {
+    const agent: AgentAdapter = new IbpAgent({
+      model: (messages, tools, s) => this.deps.ai.chat("component", messages, model, s, tools),
+      commands: this.deps.commands,
+    });
+    return this.runJob(answer, project, request, signal, "ai_no_tool_model", (workspace, io) =>
+      agent.run(
+        { workspace, stack: project.stack, request, language: this.deps.language(), history },
+        io,
+        signal,
+      ),
+    );
+  }
+
+  /** Writes the site's copy from the project description; reviewed like an agent run. */
+  generate(
+    answer: ChatMessageView,
+    project: ProjectSummary,
+    request: string,
+    model: "auto" | ModelRef,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const generator = new ContentGenerator((messages, s) =>
+      this.deps.ai.chat("copy", messages, model, s),
+    );
+    const details = {
+      name: project.name,
+      client: project.client,
+      industry: project.industry,
+      description: project.description,
+    };
+    return this.runJob(answer, project, request, signal, "ai_no_model", (workspace, io) =>
+      generator.run({ workspace, details, language: this.deps.language() }, io, signal),
+    );
+  }
+
+  private async runJob(
+    answer: ChatMessageView,
+    project: ProjectSummary,
+    request: string,
+    signal: AbortSignal,
+    noModelCode: ErrorCode,
+    job: (
+      workspace: Workspace,
+      io: AgentIO,
+    ) => Promise<{ summary: string; stoppedAtLimit: boolean }>,
   ): Promise<void> {
     const run = {
       projectId: project.id,
@@ -70,26 +125,18 @@ export class AgentRuns {
     }
     const entry: Entry = { workspace, request, running: true };
     this.entries.set(answer.id, entry);
-    const agent: AgentAdapter = new IbpAgent({
-      model: (messages, tools, s) => this.deps.ai.chat("component", messages, model, s, tools),
-      commands: this.deps.commands,
-    });
 
     try {
-      const result = await agent.run(
-        { workspace, stack: project.stack, request, language: this.deps.language(), history },
-        {
-          emit: (event) => this.onEvent(answer, event),
-          approve: (req) => this.askApproval(answer, entry, req, signal),
-        },
-        signal,
-      );
+      const result = await job(workspace, {
+        emit: (event) => this.onEvent(answer, event),
+        approve: (req) => this.askApproval(answer, entry, req, signal),
+      });
       answer.run = { ...answer.run, status: "done", stoppedAtLimit: result.stoppedAtLimit };
       if (!answer.content.trim() && result.summary) answer.content = result.summary;
     } catch (raw) {
       answer.run = { ...answer.run, status: signal.aborted ? "stopped" : "failed" };
       let error = toAiError(raw);
-      if (error.code === "ai_no_model") error = new IbpError("ai_no_tool_model", error.message);
+      if (error.code === "ai_no_model") error = new IbpError(noModelCode, error.message);
       const appError = toAppError(error);
       if (appError.code !== "cancelled") answer.error = appError;
     } finally {

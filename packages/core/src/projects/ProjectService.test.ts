@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { ProjectDetails } from "@ibp/shared";
+import { siteContentSchema, type ProjectDetails } from "@ibp/shared";
 import { IbpError } from "../errors";
 import { exists } from "../fsutil";
 import { toFolderName } from "./folderName";
@@ -95,9 +95,13 @@ describe("ProjectService.create", () => {
     expect(pkg.name).toBe("tasca-ze-porto");
     const html = await readFile(join(project.path, "index.html"), "utf8");
     expect(html).toContain("<title>Tasca &#34;Zé&#34; &#60;Porto&#62;</title>");
-    const site = await readFile(join(project.path, "src", "content", "site.ts"), "utf8");
-    expect(site).toContain(`name: ${JSON.stringify(details.name)}`);
-    expect(site).not.toContain("__IBP_");
+    const site = siteContentSchema.parse(
+      JSON.parse(await readFile(join(project.path, "src", "content", "site.json"), "utf8")),
+    );
+    expect(site.business).toMatchObject({ name: details.name, client: details.client });
+    expect(site.theme).toBe("terracotta"); // restaurant theme
+    expect(site.pages.map((p) => p.slug)).toEqual(["", "menu"]);
+    expect(JSON.stringify(site)).not.toContain("__IBP_");
     expect(await exists(join(project.path, ".gitignore"))).toBe(true);
     expect(await exists(join(project.path, "_gitignore"))).toBe(false);
 
@@ -112,7 +116,7 @@ describe("ProjectService.create", () => {
     for (const file of [
       "src/app/layout.tsx",
       "src/app/page.tsx",
-      "src/components/Hero.tsx",
+      "src/components/sections/Sections.tsx",
       "next.config.ts",
     ]) {
       expect(await exists(join(project.path, file))).toBe(true);

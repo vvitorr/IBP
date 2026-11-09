@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -17,6 +17,7 @@ let posted: HostMessage[];
 let spawned: string[][];
 let confirmAnswer: boolean;
 let picked: string | undefined;
+let pickedFile: string | undefined;
 let opened: string[];
 let controller: StudioController;
 
@@ -39,6 +40,7 @@ function fakeHost(): HostPlatform {
     updateSetting: async (update) => void Object.assign(settings, { [update.key]: update.value }),
     projectsRoot: () => root,
     pickFolder: async () => picked,
+    pickFile: async () => pickedFile,
     confirm: async () => confirmAnswer,
     notify: () => {},
     currentProjectPath: () => undefined,
@@ -222,6 +224,46 @@ describe("StudioController", () => {
 
     await send({ type: "projects/open", requestId: "4", id });
     expect(opened).toEqual([`project:${id}`]);
+  });
+
+  it("reads and saves validated site content, and imports only real images", async () => {
+    const created = await send({
+      type: "projects/create",
+      requestId: "1",
+      details,
+      template: "base-vite-react",
+    });
+    const id = created.ok ? created.projectId : undefined;
+    expect((await send({ type: "site/get", requestId: "2", id })).ok).toBe(true);
+    const message = posted.find((m) => m.type === "site/content");
+    const content = message?.type === "site/content" ? message.content : null;
+    expect(content?.business.name).toBe("Café Central");
+    expect(content?.theme).toBe("espresso");
+
+    const edited = { ...content, business: { ...content?.business, tagline: "Nova frase" } };
+    expect((await send({ type: "site/save", requestId: "3", id, content: edited })).ok).toBe(true);
+    const bad = { ...edited, pages: [] };
+    expect((await send({ type: "site/save", requestId: "4", id, content: bad })).ok).toBe(false);
+
+    const png = join(root, "Logótipo Café.png");
+    await writeFile(
+      png,
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0, 0, 0, 0, 0]),
+    );
+    pickedFile = png;
+    const imported = await send({ type: "site/image", requestId: "5", id });
+    expect(imported).toMatchObject({
+      ok: true,
+      value: expect.stringMatching(/^\/images\/logotipo-cafe-[0-9a-f]{8}\.png$/),
+    });
+
+    const fake = join(root, "virus.png");
+    await writeFile(fake, "<svg onload=alert(1)>");
+    pickedFile = fake;
+    expect(await send({ type: "site/image", requestId: "6", id })).toMatchObject({
+      ok: false,
+      error: { code: "image_invalid" },
+    });
   });
 
   it("applies allow-listed settings", async () => {

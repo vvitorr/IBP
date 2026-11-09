@@ -4,6 +4,8 @@ import { basename, join, relative, sep } from "node:path";
 import type { ProjectDetails, ProjectSummary, TemplateId } from "@ibp/shared";
 import { hasErrorCode, IbpError } from "../errors";
 import { exists } from "../fsutil";
+import { SITE_CONTENT_FILE } from "@ibp/shared";
+import { presetContent } from "../site/presets";
 import { SHARED_TEMPLATE_DIR, TEMPLATES } from "../templates";
 import { toFolderName } from "./folderName";
 import type { GitRunner } from "./git";
@@ -225,12 +227,12 @@ export class ProjectService {
         __IBP_SITE_TITLE__: escapeHtml(details.name),
       });
     }
-    await replaceInFile(join(target, "src", "content", "site.ts"), {
-      '"__IBP_SITE_NAME__"': JSON.stringify(details.name),
-      '"__IBP_CLIENT__"': JSON.stringify(details.client),
-      '"__IBP_INDUSTRY__"': JSON.stringify(details.industry),
-      '"__IBP_DESCRIPTION__"': JSON.stringify(details.description),
-    });
+    // All texts, pages and the theme: validated JSON the content editor and the AI can rewrite.
+    await writeFile(
+      join(target, SITE_CONTENT_FILE),
+      `${JSON.stringify(presetContent(details), null, 2)}\n`,
+      "utf8",
+    );
   }
 
   private async initGit(dir: string): Promise<GitOutcome> {

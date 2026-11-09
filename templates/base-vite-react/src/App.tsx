@@ -1,28 +1,24 @@
-import { About } from "./components/About";
-import { Contact } from "./components/Contact";
-import { Footer } from "./components/Footer";
-import { Header } from "./components/Header";
-import { Hero } from "./components/Hero";
-import { Services } from "./components/Services";
+import { useEffect } from "react";
+import { PageView } from "./components/PageView";
+import { findPage, site } from "./content/site";
+import { THEMES, themeVars } from "./content/themes";
 
-// Each section carries a stable data-editor-id so IBP can map what you click to its source.
+// Each page of site.json is served at /<slug>; unknown paths show the home page.
+const slug = window.location.pathname.replace(/^\/+|\/+$/g, "");
+const page = findPage(slug) ?? site.pages[0];
+
 export function App() {
-  return (
-    <>
-      <a
-        href="#conteudo"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:bg-paper focus:px-3 focus:py-2"
-      >
-        Saltar para o conteúdo
-      </a>
-      <Header />
-      <main id="conteudo">
-        <Hero />
-        <About />
-        <Services />
-        <Contact />
-      </main>
-      <Footer />
-    </>
-  );
+  useEffect(() => {
+    const root = document.documentElement;
+    for (const [name, value] of Object.entries(themeVars(site.theme)))
+      root.style.setProperty(name, value);
+    const fonts = document.createElement("link");
+    fonts.rel = "stylesheet";
+    fonts.href = THEMES[site.theme].fontsHref;
+    document.head.append(fonts);
+    document.title =
+      page && page.slug ? `${page.title} · ${site.business.name}` : site.business.name;
+  }, []);
+
+  return page ? <PageView page={page} /> : null;
 }

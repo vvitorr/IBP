@@ -13,6 +13,7 @@ import {
   LoaderCircle,
   Package,
   Search,
+  Sparkles,
   TriangleAlert,
   Undo2,
 } from "lucide-react";
@@ -33,6 +34,7 @@ const STEP_ICONS: Record<AgentStepView["tool"], IconType> = {
   run_check: ListChecks,
   install_package: Package,
   finish: Flag,
+  generate_content: Sparkles,
   unknown: CircleX,
 };
 
@@ -174,9 +176,11 @@ export function AgentRun({
               const expanded = open[change.path] ?? false;
               return (
                 <li key={change.path} className="text-[12px]">
-                  <div className="flex items-center gap-1.5">
-                    <Icon size={13} className="shrink-0 text-muted" aria-hidden />
-                    <span className="min-w-0 flex-1 font-mono break-all">{change.path}</span>
+                  <p className="flex items-start gap-1.5 font-mono break-all">
+                    <Icon size={13} className="mt-0.5 shrink-0 text-muted" aria-hidden />
+                    {change.path}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-1.5 pl-5">
                     <Badge>{t(`agent.changes.${change.kind}`)}</Badge>
                     <span className="font-mono text-accent">+{change.additions}</span>
                     <span className="font-mono text-danger">−{change.deletions}</span>

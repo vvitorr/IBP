@@ -9,6 +9,7 @@ import {
   type WebviewRequest,
 } from "@ibp/shared";
 import { AgentRuns } from "./ai/agentRuns";
+import { importImage, readSiteContent, writeSiteContent } from "./site/content";
 import { AiService, toAiError } from "./ai/AiService";
 import { DevServerManager } from "./devServer";
 import { IbpError, toAppError } from "./errors";
@@ -123,12 +124,12 @@ export class StudioController {
       return;
     }
     try {
-      const projectId = await this.handle(message);
+      const result = await this.handle(message);
       this.host.post({
         type: "response",
         requestId: message.requestId,
         ok: true,
-        ...(projectId ? { projectId } : {}),
+        ...(typeof result === "string" ? { projectId: result } : (result ?? {})),
       });
     } catch (error) {
       const appError = toAppError(error);
@@ -143,7 +144,7 @@ export class StudioController {
     }
     if (message.type.startsWith("ai/")) await this.pushAi();
     else if (message.type.startsWith("chat/")) this.pushChat();
-    else if (message.type.startsWith("agent/")) {
+    else if (message.type.startsWith("agent/") || message.type === "site/generate") {
       this.pushChat();
       await this.pushState(true);
     } else await this.pushState(!message.type.startsWith("preview/"));
@@ -188,7 +189,7 @@ export class StudioController {
   }
 
   /** Returns a project id when the request created or selected one. */
-  private async handle(message: WebviewRequest): Promise<string | undefined> {
+  private async handle(message: WebviewRequest): Promise<string | { value: string } | undefined> {
     const { host, service, preview } = this;
     switch (message.type) {
       case "projects/list":
@@ -294,7 +295,7 @@ export class StudioController {
     }
   }
 
-  private async handleAi(message: WebviewRequest): Promise<undefined> {
+  private async handleAi(message: WebviewRequest): Promise<{ value: string } | undefined> {
     const { ai } = this;
     switch (message.type) {
       case "ai/provider/add":
@@ -345,6 +346,36 @@ export class StudioController {
       case "agent/approve":
         this.agents.approve(message.messageId, message.approvalId, message.approved);
         break;
+      case "site/get": {
+        const project = await this.service.get(message.id);
+        if (project.missing) throw new IbpError("folder_missing", project.path);
+        this.host.post({
+          type: "site/content",
+          projectId: project.id,
+          content: await readSiteContent(project.path),
+        });
+        break;
+      }
+      case "site/save": {
+        const project = await this.service.get(message.id);
+        if (project.missing) throw new IbpError("folder_missing", project.path);
+        await writeSiteContent(project.path, message.content);
+        break;
+      }
+      case "site/image": {
+        const project = await this.service.get(message.id);
+        if (project.missing) throw new IbpError("folder_missing", project.path);
+        const file = await this.host.pickFile({
+          title: this.t("content.image.pick"),
+          button: this.t("content.image.use"),
+          filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "avif"] }],
+        });
+        if (!file) throw new IbpError("cancelled");
+        return { value: await importImage(project.path, file) };
+      }
+      case "site/generate":
+        await this.startGeneration(message.id, message.model);
+        break;
       case "agent/accept":
         await this.agents.accept(this.message(message.messageId));
         break;
@@ -353,6 +384,39 @@ export class StudioController {
         break;
     }
     return undefined;
+  }
+
+  /** Writes the site's copy with AI, shown as an Assistant exchange the user can review. */
+  private async startGeneration(projectId: string, model: "auto" | ModelRef) {
+    if (this.chatAbort) throw new IbpError("ai_busy");
+    const project = await this.service.get(projectId);
+    if (project.missing) throw new IbpError("folder_missing", project.path);
+    const at = new Date().toISOString();
+    const request = this.t("site.generateRequest", { name: project.name });
+    const user: ChatMessageView = {
+      id: randomUUID(),
+      role: "user",
+      content: request,
+      model: null,
+      at,
+    };
+    const answer: ChatMessageView = {
+      id: randomUUID(),
+      role: "assistant",
+      content: "",
+      model: null,
+      at,
+    };
+    this.chat = [...this.chat, user, answer].slice(-CHAT_HISTORY);
+    this.chatAbort = new AbortController();
+    this.pushChat();
+    void this.agents
+      .generate(answer, project, request, model, this.chatAbort.signal)
+      .finally(async () => {
+        this.chatAbort = undefined;
+        this.pushChat();
+        await this.pushAi();
+      });
   }
 
   private message(id: string): ChatMessageView {

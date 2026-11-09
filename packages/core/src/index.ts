@@ -12,5 +12,7 @@ export * from "./projects/ProjectService";
 export type * from "./projects/ProjectStore";
 export * from "./projects/types";
 export * from "./shellEnv";
+export * from "./site/content";
+export * from "./site/presets";
 export * from "./StudioController";
 export * from "./templates";

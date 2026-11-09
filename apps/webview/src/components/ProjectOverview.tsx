@@ -10,11 +10,11 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { ProjectSummary, Settings } from "@ibp/shared";
-import type { RequestInput } from "../host";
 import { useLocale, useT } from "../i18n";
 import { Button } from "./ui";
 
-type Action = Extract<RequestInput, { id: string }>["type"];
+type Action =
+  "projects/open" | "projects/installDeps" | "projects/openCode" | "projects/openTerminal";
 
 export function ProjectOverview({
   project,
@@ -32,7 +32,7 @@ export function ProjectOverview({
   /** Whether this host can open a terminal (VS Code yes, desktop app not yet). */
   terminal: boolean;
   busy: boolean;
-  onAction: (type: Exclude<Action, "projects/update" | "projects/setArchived">) => void;
+  onAction: (type: Action) => void;
   onArchive: (archived: boolean) => void;
   onCreate: () => void;
 }) {
