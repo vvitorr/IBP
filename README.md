@@ -11,7 +11,11 @@ or **Next.js**, with TypeScript and Tailwind CSS.
 ## What works today
 
 - **Projects** — create a site from the Vite or Next.js starter (with Git and a first commit),
-  open an existing React project, edit its details, archive it.
+  open an existing React project, edit its details, archive it. New sites start from an industry
+  preset (restaurant, café, workshop, clinic, shop and more) with pages, sections and a theme.
+- **Content** — edit the site's texts, contacts, hours, sections, theme and images in a form; the
+  site keeps it all in `src/content/site.json`. The AI can write the copy from the business
+  description, shown as a change to accept or revert.
 - **Live preview** — runs the project's real dev server on `127.0.0.1` and shows it inside the
   app at desktop, tablet and mobile sizes, with refresh, restart, log and "open in browser".
 - **AI models** — OpenRouter, Ollama, LM Studio, FreeLLMAPI or any OpenAI-compatible service,
@@ -23,7 +27,7 @@ or **Next.js**, with TypeScript and Tailwind CSS.
   commits only the files it touched; **Revert** puts them back exactly.
 - Interface in Portuguese (Portugal) by default, or English; dark or light theme.
 
-Not yet: generating a whole site from a description, click-to-edit on the preview, a built-in
+Not yet: click-to-edit on the preview, a built-in
 code editor and terminal in the desktop app, automated quality checks and deployment. See
 [docs/roadmap.md](docs/roadmap.md) for the status of every item, including what has only been
 tested against a fake model server so far.

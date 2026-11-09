@@ -69,7 +69,7 @@ test("installs dependencies and shows the live preview", async () => {
   await page.getByRole("button", { name: "Ver site" }).click();
 
   const frame = page.frameLocator("iframe");
-  await expect(frame.getByRole("heading", { name: "Bem-vindo" })).toBeVisible({ timeout: 60_000 });
+  await expect(frame.getByRole("heading", { name: "Cozinha feita com tempo" })).toBeVisible({ timeout: 60_000 });
   if (screenshots) await page.screenshot({ path: join(screenshots, "preview-desktop.png") });
 
   await page.getByRole("radio", { name: "Telemóvel" }).click();
@@ -99,7 +99,7 @@ test("configures an AI provider, chats with streaming and never stores the key i
     await expect(card.getByLabel("Chave da API")).toHaveValue("");
 
     await card.getByRole("button", { name: "Testar ligação" }).click();
-    await expect(card.getByText(/Ligado · 8 modelos/)).toBeVisible();
+    await expect(card.getByText(/Ligado · 10 modelos/)).toBeVisible();
     await expect(page.getByText("Ordem de utilização")).toBeVisible();
     if (screenshots) await page.screenshot({ path: join(screenshots, "ai-settings.png") });
 
@@ -212,7 +212,10 @@ test("writes the site copy with AI on creation, then edits content and adds an i
       await expect(remove).toHaveCount(left - 1);
     }
     await card.getByLabel("Filtrar modelos").fill("fake/content");
-    await card.getByRole("row", { name: /fake\/content\s/ }).getByRole("button", { name: "Usar" }).click();
+    await card
+      .getByRole("row", { name: /fake\/content\s/ })
+      .getByRole("button", { name: "Usar" })
+      .click();
     await page.getByRole("button", { name: "Voltar ao projeto" }).click();
 
     await page.getByLabel("Nome do site").fill("Tasca do Zé");
@@ -225,23 +228,35 @@ test("writes the site copy with AI on creation, then edits content and adds an i
     await expect(page.getByText(/Alterações aceites/)).toBeVisible();
     const projectDir = join(sites, "tasca-do-ze");
     const siteFile = join(projectDir, "src", "content", "site.json");
-    expect(JSON.parse(await readFile(siteFile, "utf8")).pages[0].sections[0].title).toBe("Petiscos e vinho da casa");
-    const log = execFileSync("git", ["log", "-1", "--format=%s"], { cwd: projectDir, encoding: "utf8" });
+    expect(JSON.parse(await readFile(siteFile, "utf8")).pages[0].sections[0].title).toBe(
+      "Petiscos e vinho da casa",
+    );
+    const log = execFileSync("git", ["log", "-1", "--format=%s"], {
+      cwd: projectDir,
+      encoding: "utf8",
+    });
     expect(log).toMatch(/^ibp: Escreve os textos do site/);
 
     await page.getByRole("tab", { name: "Conteúdo" }).click();
     await page.getByLabel("Frase curta").fill("A melhor tasca do bairro");
-    await writeFile(join(root, "foto.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0, 0, 0, 0, 0]));
+    await writeFile(
+      join(root, "foto.png"),
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0, 0, 0, 0, 0]),
+    );
     await page.getByRole("button", { name: "Escolher imagem" }).first().click();
     await expect(page.getByText(/^\/images\/foto-/)).toBeVisible();
     if (screenshots) await page.screenshot({ path: join(screenshots, "content-editor.png") });
     await page.getByRole("main").getByRole("button", { name: "Guardar", exact: true }).click();
-    await expect(page.getByText("Guardado. A pré-visualização já mostra as alterações.")).toBeVisible();
+    await expect(
+      page.getByText("Guardado. A pré-visualização já mostra as alterações."),
+    ).toBeVisible();
 
     const saved = JSON.parse(await readFile(siteFile, "utf8"));
     expect(saved.business.tagline).toBe("A melhor tasca do bairro");
     expect(saved.pages[0].sections[0].image.src).toMatch(/^\/images\/foto-[0-9a-f]{8}\.png$/);
-    expect(await stat(join(projectDir, "public", saved.pages[0].sections[0].image.src))).toBeTruthy();
+    expect(
+      await stat(join(projectDir, "public", saved.pages[0].sections[0].image.src)),
+    ).toBeTruthy();
   } finally {
     await server.close();
   }

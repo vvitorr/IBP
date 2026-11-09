@@ -227,7 +227,12 @@ describe("StudioController", () => {
   });
 
   it("reads and saves validated site content, and imports only real images", async () => {
-    const created = await send({ type: "projects/create", requestId: "1", details, template: "base-vite-react" });
+    const created = await send({
+      type: "projects/create",
+      requestId: "1",
+      details,
+      template: "base-vite-react",
+    });
     const id = created.ok ? created.projectId : undefined;
     expect((await send({ type: "site/get", requestId: "2", id })).ok).toBe(true);
     const message = posted.find((m) => m.type === "site/content");
@@ -241,15 +246,24 @@ describe("StudioController", () => {
     expect((await send({ type: "site/save", requestId: "4", id, content: bad })).ok).toBe(false);
 
     const png = join(root, "Logótipo Café.png");
-    await writeFile(png, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0, 0, 0, 0, 0]));
+    await writeFile(
+      png,
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0, 0, 0, 0, 0]),
+    );
     pickedFile = png;
     const imported = await send({ type: "site/image", requestId: "5", id });
-    expect(imported).toMatchObject({ ok: true, value: expect.stringMatching(/^\/images\/logotipo-cafe-[0-9a-f]{8}\.png$/) });
+    expect(imported).toMatchObject({
+      ok: true,
+      value: expect.stringMatching(/^\/images\/logotipo-cafe-[0-9a-f]{8}\.png$/),
+    });
 
     const fake = join(root, "virus.png");
     await writeFile(fake, "<svg onload=alert(1)>");
     pickedFile = fake;
-    expect(await send({ type: "site/image", requestId: "6", id })).toMatchObject({ ok: false, error: { code: "image_invalid" } });
+    expect(await send({ type: "site/image", requestId: "6", id })).toMatchObject({
+      ok: false,
+      error: { code: "image_invalid" },
+    });
   });
 
   it("applies allow-listed settings", async () => {

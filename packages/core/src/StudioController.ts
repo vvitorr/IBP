@@ -189,9 +189,7 @@ export class StudioController {
   }
 
   /** Returns a project id when the request created or selected one. */
-  private async handle(
-    message: WebviewRequest,
-  ): Promise<string | { value: string } | undefined> {
+  private async handle(message: WebviewRequest): Promise<string | { value: string } | undefined> {
     const { host, service, preview } = this;
     switch (message.type) {
       case "projects/list":
@@ -351,7 +349,11 @@ export class StudioController {
       case "site/get": {
         const project = await this.service.get(message.id);
         if (project.missing) throw new IbpError("folder_missing", project.path);
-        this.host.post({ type: "site/content", projectId: project.id, content: await readSiteContent(project.path) });
+        this.host.post({
+          type: "site/content",
+          projectId: project.id,
+          content: await readSiteContent(project.path),
+        });
         break;
       }
       case "site/save": {

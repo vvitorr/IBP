@@ -299,11 +299,14 @@ export const ptPT = {
   "site.generate.hint":
     "Escreve os títulos, a apresentação e os serviços a partir da descrição do negócio. Revês tudo antes de aceitar.",
   "create.generate": "Gerar os textos com IA a partir da descrição",
-  "error.contentInvalid": "O ficheiro de conteúdo do site (site.json) tem um erro. Vê os detalhes técnicos.",
-  "error.imageInvalid": "Essa imagem não pode ser usada: escolhe um PNG, JPEG, WebP ou AVIF até 5 MB.",
+  "error.contentInvalid":
+    "O ficheiro de conteúdo do site (site.json) tem um erro. Vê os detalhes técnicos.",
+  "error.imageInvalid":
+    "Essa imagem não pode ser usada: escolhe um PNG, JPEG, WebP ou AVIF até 5 MB.",
   "tab.content": "Conteúdo",
   "content.loading": "A carregar o conteúdo…",
-  "content.missing": "Este projeto não tem conteúdo editável (src/content/site.json). Projetos criados no IBP têm; noutros projetos usa o Assistente.",
+  "content.missing":
+    "Este projeto não tem conteúdo editável (src/content/site.json). Projetos criados no IBP têm; noutros projetos usa o Assistente.",
   "content.save": "Guardar",
   "content.saving": "A guardar…",
   "content.saved": "Guardado. A pré-visualização já mostra as alterações.",
@@ -331,7 +334,7 @@ export const ptPT = {
   "siteTheme.boutique": "Boutique",
   "siteTheme.slate": "Ardósia",
   "content.pages": "Páginas e secções",
-  "content.page": "Página \"{title}\"",
+  "content.page": 'Página "{title}"',
   "content.home": "Página inicial",
   "content.section.hero": "Destaque",
   "content.section.about": "Sobre",

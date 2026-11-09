@@ -100,6 +100,11 @@ Facts used (accessed 2026-11-07):
 - Ollama: `tools` supported on `/v1/chat/completions`; `tool_choice` not; `role:"tool"` history
   not documented.
 
+## 2e. Phase 4 (2026-11-09)
+
+- No new npm dependencies. Generated sites load their theme fonts from Google Fonts
+  (`fonts.googleapis.com`), which sees the visitor's IP; self-hosting fonts is a later option.
+
 ## 3. FreeLLMAPI
 
 - Repository: <https://github.com/tashfeenahmed/freellmapi> (the original; forks with the same

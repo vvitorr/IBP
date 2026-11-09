@@ -69,6 +69,14 @@ connect-src 'none'`. Single-instance lock so two windows never write the same re
 - **Test hooks:** `IBP_TEST_MODE=1` makes the desktop folder picker and confirmations answer from
   environment variables. Anyone who can set the app's environment already controls the process.
 
+- **Site content:** IBP writes `src/content/site.json` only after schema validation. Links accept
+  internal paths, anchors, `tel:`, `mailto:` and `https:` only; images `/images/…` or `https:`
+  (no `javascript:` or `data:`). AI-written copy is merged into a fixed set of fields and goes
+  through the change review.
+- **Image import:** the host shows the file picker and copies the file; the webview never sends
+  a path. Files are checked by their first bytes (PNG, JPEG, WebP, AVIF), limited to 5 MB, and
+  SVG is refused. Names are sanitised and include a content hash.
+
 ## Planned controls
 
 - Phase 2 (done): see "API keys" above. Linux without a keyring falls back to a hard-coded key;

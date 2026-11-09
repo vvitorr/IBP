@@ -95,11 +95,21 @@ Decided in ADR-022 to ADR-024. Package `packages/agent` + `packages/core/src/ai/
 | Real tool-capable models                                                                 | Not verified | Needs a real provider/key; Ollama `role: "tool"` history not documented              |
 | Agent inside the VS Code extension                                                       | Implemented  | Same shared code; no automated VS Code test                                          |
 
-## Phase 4 — Website generation — Planned
+## Phase 4 — Website generation — Tested
 
-Template engine and design system, industry templates (restaurant, professional services,
-automotive, construction, healthcare, local retail, corporate), multi-page routing, assets,
-static prerender for SEO, live preview with dev-server status and device viewports.
+Decided in ADR-025 to ADR-028.
+
+| Item                                                                                | Status       | Evidence                                                          |
+| ----------------------------------------------------------------------------------- | ------------ | ----------------------------------------------------------------- |
+| Content model `site.json` with schema, pages and eight section types                | Tested       | Unit tests                                                        |
+| Shared components for Vite + React and Next.js (static `[slug]` pages, prerendered) | Tested       | Both stacks built with the restaurant preset, including `/menu`   |
+| Eight themes (CSS variables, Google Fonts) and industry presets                     | Tested       | Unit tests; visual check of the Vite site                         |
+| AI copy writing from the business description, reviewed like an agent change        | Tested       | Unit tests with the fake server (valid reply, retry); desktop e2e |
+| Content editor: business, hours, theme, sections, save/discard                      | Tested       | Controller tests; desktop e2e                                     |
+| Image import (type checked by content, 5 MB, no SVG)                                | Tested       | Unit tests; desktop e2e                                           |
+| Real models writing pt-PT copy                                                      | Not verified | Needs a real provider/key                                         |
+| Content editor inside the VS Code extension                                         | Implemented  | Same shared code; no automated VS Code test                       |
+| Image resizing, SEO metadata per page                                               | Planned      | Next steps                                                        |
 
 ## Phase 5 — Visual editor — Planned
 

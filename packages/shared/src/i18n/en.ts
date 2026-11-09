@@ -295,11 +295,13 @@ export const en: Record<MessageKey, string> = {
   "site.generate.hint":
     "Writes the headings, introduction and services from the business description. You review everything before accepting.",
   "create.generate": "Write the copy with AI from the description",
-  "error.contentInvalid": "The website content file (site.json) has an error. See the technical details.",
+  "error.contentInvalid":
+    "The website content file (site.json) has an error. See the technical details.",
   "error.imageInvalid": "That image cannot be used: choose a PNG, JPEG, WebP or AVIF up to 5 MB.",
   "tab.content": "Content",
   "content.loading": "Loading the content…",
-  "content.missing": "This project has no editable content (src/content/site.json). Projects created in IBP have it; for others use the Assistant.",
+  "content.missing":
+    "This project has no editable content (src/content/site.json). Projects created in IBP have it; for others use the Assistant.",
   "content.save": "Save",
   "content.saving": "Saving…",
   "content.saved": "Saved. The preview already shows the changes.",
@@ -327,7 +329,7 @@ export const en: Record<MessageKey, string> = {
   "siteTheme.boutique": "Boutique",
   "siteTheme.slate": "Slate",
   "content.pages": "Pages and sections",
-  "content.page": "Page \"{title}\"",
+  "content.page": 'Page "{title}"',
   "content.home": "Home page",
   "content.section.hero": "Hero",
   "content.section.about": "About",

@@ -378,7 +378,12 @@ export const webviewMessageSchema = z.discriminatedUnion("type", [
   }),
   // Content editor: read/save site.json (validated) and import an image picked host-side.
   withId("site/get"),
-  z.strictObject({ type: z.literal("site/save"), requestId: requestIdSchema, id: projectIdSchema, content: siteContentSchema }),
+  z.strictObject({
+    type: z.literal("site/save"),
+    requestId: requestIdSchema,
+    id: projectIdSchema,
+    content: siteContentSchema,
+  }),
   withId("site/image"),
   // Writes the site's copy from the project description (reviewed like an agent run).
   z.strictObject({
