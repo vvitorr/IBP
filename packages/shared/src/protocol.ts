@@ -6,6 +6,7 @@
  */
 import { z } from "zod";
 import { LOCALES, type MessageKey } from "./i18n/index.ts";
+import { siteContentSchema } from "./site.ts";
 
 export const MODES = ["beginner", "developer"] as const;
 export const THEMES = ["auto", "dark", "light"] as const;
@@ -81,6 +82,8 @@ export const ERROR_CODES = [
   "ai_no_tool_model",
   "git_no_identity",
   "git_failed",
+  "content_invalid",
+  "image_invalid",
   "unknown",
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
@@ -115,6 +118,8 @@ export const ERROR_MESSAGE_KEYS: Record<ErrorCode, MessageKey> = {
   ai_no_tool_model: "error.aiNoToolModel",
   git_no_identity: "error.gitNoIdentity",
   git_failed: "error.gitFailed",
+  content_invalid: "error.contentInvalid",
+  image_invalid: "error.imageInvalid",
   unknown: "error.unknown",
 };
 
@@ -371,6 +376,10 @@ export const webviewMessageSchema = z.discriminatedUnion("type", [
     approvalId: z.string().min(1).max(64),
     approved: z.boolean(),
   }),
+  // Content editor: read/save site.json (validated) and import an image picked host-side.
+  withId("site/get"),
+  z.strictObject({ type: z.literal("site/save"), requestId: requestIdSchema, id: projectIdSchema, content: siteContentSchema }),
+  withId("site/image"),
   // Writes the site's copy from the project description (reviewed like an agent run).
   z.strictObject({
     type: z.literal("site/generate"),
@@ -434,6 +443,8 @@ const responseSchema = z.discriminatedUnion("ok", [
     requestId: requestIdSchema,
     ok: z.literal(true),
     projectId: projectIdSchema.optional(),
+    /** Extra result of some requests, e.g. the /images/… path of an imported image. */
+    value: z.string().max(500).optional(),
   }),
   z.strictObject({
     type: z.literal("response"),
@@ -455,6 +466,11 @@ export const hostMessageSchema = z.union([
   }),
   z.strictObject({ type: z.literal("navigate"), view: z.enum(["create"]) }),
   z.strictObject({ type: z.literal("ai/state"), ai: aiStateSchema }),
+  z.strictObject({
+    type: z.literal("site/content"),
+    projectId: projectIdSchema,
+    content: siteContentSchema.nullable(),
+  }),
   z.strictObject({ type: z.literal("chat/state"), chat: chatStateSchema }),
   // Streamed tokens of one assistant message, appended by the Studio.
   z.strictObject({

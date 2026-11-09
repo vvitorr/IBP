@@ -9,6 +9,7 @@ import {
   type WebviewRequest,
 } from "@ibp/shared";
 import { AgentRuns } from "./ai/agentRuns";
+import { importImage, readSiteContent, writeSiteContent } from "./site/content";
 import { AiService, toAiError } from "./ai/AiService";
 import { DevServerManager } from "./devServer";
 import { IbpError, toAppError } from "./errors";
@@ -123,12 +124,12 @@ export class StudioController {
       return;
     }
     try {
-      const projectId = await this.handle(message);
+      const result = await this.handle(message);
       this.host.post({
         type: "response",
         requestId: message.requestId,
         ok: true,
-        ...(projectId ? { projectId } : {}),
+        ...(typeof result === "string" ? { projectId: result } : (result ?? {})),
       });
     } catch (error) {
       const appError = toAppError(error);
@@ -188,7 +189,9 @@ export class StudioController {
   }
 
   /** Returns a project id when the request created or selected one. */
-  private async handle(message: WebviewRequest): Promise<string | undefined> {
+  private async handle(
+    message: WebviewRequest,
+  ): Promise<string | { value: string } | undefined> {
     const { host, service, preview } = this;
     switch (message.type) {
       case "projects/list":
@@ -294,7 +297,7 @@ export class StudioController {
     }
   }
 
-  private async handleAi(message: WebviewRequest): Promise<undefined> {
+  private async handleAi(message: WebviewRequest): Promise<{ value: string } | undefined> {
     const { ai } = this;
     switch (message.type) {
       case "ai/provider/add":
@@ -345,6 +348,29 @@ export class StudioController {
       case "agent/approve":
         this.agents.approve(message.messageId, message.approvalId, message.approved);
         break;
+      case "site/get": {
+        const project = await this.service.get(message.id);
+        if (project.missing) throw new IbpError("folder_missing", project.path);
+        this.host.post({ type: "site/content", projectId: project.id, content: await readSiteContent(project.path) });
+        break;
+      }
+      case "site/save": {
+        const project = await this.service.get(message.id);
+        if (project.missing) throw new IbpError("folder_missing", project.path);
+        await writeSiteContent(project.path, message.content);
+        break;
+      }
+      case "site/image": {
+        const project = await this.service.get(message.id);
+        if (project.missing) throw new IbpError("folder_missing", project.path);
+        const file = await this.host.pickFile({
+          title: this.t("content.image.pick"),
+          button: this.t("content.image.use"),
+          filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "avif"] }],
+        });
+        if (!file) throw new IbpError("cancelled");
+        return { value: await importImage(project.path, file) };
+      }
       case "site/generate":
         await this.startGeneration(message.id, message.model);
         break;

@@ -35,6 +35,7 @@ export interface HostPlatform {
     button: string;
     defaultPath: string;
   }): Promise<string | undefined>;
+  pickFile(options: { title: string; button: string; filters: { name: string; extensions: string[] }[] }): Promise<string | undefined>;
   /** Modal yes/no for high-risk actions. */
   confirm(message: string, action: string): Promise<boolean>;
   notify(level: "info" | "warning", message: string): void;

@@ -61,6 +61,18 @@ export function createVsCodeHost(
       return picked?.[0]?.fsPath;
     },
 
+    async pickFile({ title, button, filters }) {
+      const picked = await vscode.window.showOpenDialog({
+        title,
+        openLabel: button,
+        canSelectFiles: true,
+        canSelectFolders: false,
+        canSelectMany: false,
+        filters: Object.fromEntries(filters.map((f) => [f.name, f.extensions])),
+      });
+      return picked?.[0]?.fsPath;
+    },
+
     async confirm(message, action) {
       return (await vscode.window.showWarningMessage(message, { modal: true }, action)) === action;
     },

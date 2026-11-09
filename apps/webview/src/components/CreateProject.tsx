@@ -9,13 +9,17 @@ export function CreateProject({
   busy,
   onSubmit,
   onCancel,
+  canGenerate,
 }: {
   busy: boolean;
-  onSubmit: (details: ProjectDetails, template: TemplateId) => void;
+  onSubmit: (details: ProjectDetails, template: TemplateId, generate: boolean) => void;
+  /** A model is configured, so the copy can be written with AI right after creation. */
+  canGenerate: boolean;
   onCancel: (() => void) | null;
 }) {
   const t = useT();
   const [template, setTemplate] = useState<TemplateId>("base-vite-react");
+  const [generate, setGenerate] = useState(true);
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-4 px-6 py-8">
       <div className="flex flex-col gap-1">
@@ -47,9 +51,19 @@ export function CreateProject({
           ))}
         </div>
       </fieldset>
+      {canGenerate && (
+        <label className="flex items-center gap-2 text-[12px]">
+          <input
+            type="checkbox"
+            checked={generate}
+            onChange={(e) => setGenerate(e.target.checked)}
+          />
+          {t("create.generate")}
+        </label>
+      )}
       <ProjectForm
         initial={EMPTY_DETAILS}
-        onSubmit={(details) => onSubmit(details, template)}
+        onSubmit={(details) => onSubmit(details, template, canGenerate && generate)}
         showNameHint
         actions={(canSubmit) => (
           <>

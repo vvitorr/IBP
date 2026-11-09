@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { _electron as electron, expect, test, type ElectronApplication } from "@playwright/test";
@@ -26,6 +26,7 @@ test.beforeEach(async () => {
       IBP_USER_DATA: join(root, "user-data"),
       IBP_TEST_PICK_FOLDER: sites,
       IBP_TEST_CONFIRM: "yes",
+      IBP_TEST_PICK_FILE: join(root, "foto.png"),
     },
   });
 });
@@ -187,6 +188,60 @@ test("the coding agent creates a component; the user reverts, then accepts with 
       "",
       "src/components/Badge.tsx",
     ]);
+  } finally {
+    await server.close();
+  }
+});
+
+test("writes the site copy with AI on creation, then edits content and adds an image", async () => {
+  const server = await startFakeOpenAIServer();
+  try {
+    const page = await app.firstWindow();
+    // Configure a provider first so the create form offers AI copy.
+    await page.getByRole("button", { name: "Definições" }).click();
+    await page.getByLabel("Adicionar fornecedor").selectOption("custom");
+    await page.getByRole("button", { name: "Adicionar fornecedor" }).click();
+    const card = page.getByRole("article", { name: "Custom" });
+    await card.getByLabel("Endereço da API").fill(server.baseUrl);
+    await card.getByRole("button", { name: "Guardar", exact: true }).nth(1).click();
+    await card.getByRole("button", { name: "Testar ligação" }).click();
+    await expect(card.getByText(/Ligado/)).toBeVisible();
+    const remove = page.getByRole("button", { name: "Retirar" });
+    for (let left = await remove.count(); left > 0; left--) {
+      await remove.first().click();
+      await expect(remove).toHaveCount(left - 1);
+    }
+    await card.getByLabel("Filtrar modelos").fill("fake/content");
+    await card.getByRole("row", { name: /fake\/content\s/ }).getByRole("button", { name: "Usar" }).click();
+    await page.getByRole("button", { name: "Voltar ao projeto" }).click();
+
+    await page.getByLabel("Nome do site").fill("Tasca do Zé");
+    await page.getByLabel("Descrição do negócio").fill("Petiscos e vinho no centro do Porto.");
+    await expect(page.getByLabel("Gerar os textos com IA a partir da descrição")).toBeChecked();
+    await page.getByRole("button", { name: "Criar projeto" }).click();
+
+    await expect(page.getByText("Escreveu os textos do site")).toBeVisible();
+    await page.getByRole("button", { name: "Aceitar alterações" }).click();
+    await expect(page.getByText(/Alterações aceites/)).toBeVisible();
+    const projectDir = join(sites, "tasca-do-ze");
+    const siteFile = join(projectDir, "src", "content", "site.json");
+    expect(JSON.parse(await readFile(siteFile, "utf8")).pages[0].sections[0].title).toBe("Petiscos e vinho da casa");
+    const log = execFileSync("git", ["log", "-1", "--format=%s"], { cwd: projectDir, encoding: "utf8" });
+    expect(log).toMatch(/^ibp: Escreve os textos do site/);
+
+    await page.getByRole("tab", { name: "Conteúdo" }).click();
+    await page.getByLabel("Frase curta").fill("A melhor tasca do bairro");
+    await writeFile(join(root, "foto.png"), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0, 0, 0, 0, 0]));
+    await page.getByRole("button", { name: "Escolher imagem" }).first().click();
+    await expect(page.getByText(/^\/images\/foto-/)).toBeVisible();
+    if (screenshots) await page.screenshot({ path: join(screenshots, "content-editor.png") });
+    await page.getByRole("main").getByRole("button", { name: "Guardar", exact: true }).click();
+    await expect(page.getByText("Guardado. A pré-visualização já mostra as alterações.")).toBeVisible();
+
+    const saved = JSON.parse(await readFile(siteFile, "utf8"));
+    expect(saved.business.tagline).toBe("A melhor tasca do bairro");
+    expect(saved.pages[0].sections[0].image.src).toMatch(/^\/images\/foto-[0-9a-f]{8}\.png$/);
+    expect(await stat(join(projectDir, "public", saved.pages[0].sections[0].image.src))).toBeTruthy();
   } finally {
     await server.close();
   }

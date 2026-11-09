@@ -57,6 +57,7 @@ function host(): HostPlatform {
     updateSetting: async () => {},
     projectsRoot: () => root,
     pickFolder: async () => join(root, "sites"),
+    pickFile: async () => undefined,
     confirm: async () => true,
     notify: () => {},
     currentProjectPath: () => undefined,

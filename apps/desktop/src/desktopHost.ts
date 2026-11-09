@@ -4,7 +4,8 @@ import type { HostPlatform, SecretVault } from "@ibp/core";
 import type { SettingsStore } from "./settings";
 
 /**
- * Test hooks, honoured only when IBP_TEST_MODE=1: the folder picker returns IBP_TEST_PICK_FOLDER
+ * Test hooks, honoured only when IBP_TEST_MODE=1: the folder picker returns IBP_TEST_PICK_FOLDER,
+ * the file picker IBP_TEST_PICK_FILE,
  * and confirmations answer IBP_TEST_CONFIRM ("yes"/"no") instead of showing native dialogs.
  */
 const testMode = process.env.IBP_TEST_MODE === "1";
@@ -37,6 +38,17 @@ export function createDesktopHost(
         buttonLabel: button,
         defaultPath,
         properties: ["openDirectory", "createDirectory"],
+      });
+      return result.canceled ? undefined : result.filePaths[0];
+    },
+
+    async pickFile({ title, button, filters }) {
+      if (testMode && process.env.IBP_TEST_PICK_FILE) return process.env.IBP_TEST_PICK_FILE;
+      const result = await dialog.showOpenDialog(win, {
+        title,
+        buttonLabel: button,
+        filters,
+        properties: ["openFile"],
       });
       return result.canceled ? undefined : result.filePaths[0];
     },
